@@ -1,0 +1,345 @@
+:root {
+  --bg: #070b12;
+  --panel: rgba(14, 21, 34, 0.82);
+  --border: rgba(80, 112, 165, 0.5);
+  --text: #e5efff;
+  --muted: #99afd1;
+  --accent: #5aa6ff;
+  --accent2: #5eead4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+body {
+  overflow: hidden;
+}
+
+.shell {
+  position: relative;
+  height: 100%;
+  padding: 12px;
+}
+
+.mesh {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(90, 166, 255, 0.2), transparent 35%),
+    radial-gradient(circle at 90% 15%, rgba(94, 234, 212, 0.15), transparent 40%);
+}
+
+.top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+}
+
+.kicker {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 10px;
+  color: #85b5ff;
+}
+
+h1 {
+  margin: 4px 0 0;
+  font-size: 18px;
+}
+
+p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+button {
+  border: 1px solid rgba(116, 168, 255, 0.5);
+  background: rgba(19, 34, 58, 0.9);
+  color: #d8e7ff;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.stats {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chip {
+  border: 1px solid rgba(126, 159, 208, 0.45);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(13, 23, 40, 0.75);
+  color: #c9dcff;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+}
+
+.panel {
+  position: relative;
+  z-index: 1;
+  margin-top: 10px;
+  height: calc(100% - 130px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  overflow: auto;
+}
+
+.meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(75, 102, 150, 0.4);
+}
+
+.meta .title {
+  font-size: 12px;
+  color: #dbe9ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.meta a {
+  color: var(--accent2);
+  text-decoration: none;
+  font-size: 11px;
+}
+
+.loading,
+.error {
+  margin: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.loading {
+  border: 1px solid rgba(83, 157, 255, 0.4);
+  background: rgba(24, 41, 70, 0.5);
+  color: #b9d7ff;
+}
+
+.error {
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  background: rgba(84, 23, 23, 0.5);
+  color: #fecaca;
+}
+
+.graph-wrap {
+  width: 100%;
+  height: auto;
+  overflow: auto;
+  position: relative;
+}
+
+.graph-wrap svg {
+  min-width: 100%;
+  min-height: 760px;
+  display: block;
+}
+
+.node-detail {
+  margin: 8px 10px 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(90, 166, 255, 0.4);
+  border-radius: 10px;
+  background: rgba(17, 30, 50, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.node-detail-title {
+  font-size: 12px;
+  color: #d9e9ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.node-detail-cat {
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: #7cb9ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.node-detail p {
+  margin: 8px 0 0;
+  color: #b9cceb;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.node-snippet {
+  margin-top: 8px;
+  padding: 8px 9px;
+  border: 1px solid rgba(94, 234, 212, 0.35);
+  border-radius: 8px;
+  background: rgba(13, 34, 38, 0.45);
+  color: #b6e9df;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.node-snippet span {
+  color: #76dfcc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.node-chat {
+  margin-top: 10px;
+  border-top: 1px solid rgba(90, 166, 255, 0.28);
+  padding-top: 10px;
+}
+
+.node-chat-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8bb8ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.node-chat-log {
+  margin-top: 8px;
+  max-height: 140px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.node-chat-empty {
+  font-size: 11px;
+  color: #93aace;
+}
+
+.node-chat-msg {
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 7px 8px;
+  border-radius: 7px;
+}
+
+.node-chat-msg span {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.node-chat-msg.user {
+  background: rgba(27, 52, 82, 0.55);
+  border: 1px solid rgba(90, 166, 255, 0.35);
+  color: #d7e9ff;
+}
+
+.node-chat-msg.assistant {
+  background: rgba(20, 45, 41, 0.55);
+  border: 1px solid rgba(94, 234, 212, 0.3);
+  color: #d7fff9;
+}
+
+.node-chat-input-row {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.node-chat-input-row input {
+  flex: 1;
+  border: 1px solid rgba(84, 119, 175, 0.55);
+  background: rgba(9, 17, 30, 0.72);
+  color: #e4eeff;
+  border-radius: 8px;
+  padding: 8px 9px;
+  font-size: 11px;
+}
+
+.node-chat-input-row button {
+  min-width: 54px;
+  padding: 8px 10px;
+}
+
+.use-cases {
+  margin: 8px 10px 12px;
+  padding: 12px;
+  border: 1px solid rgba(94, 234, 212, 0.35);
+  border-radius: 10px;
+  background: rgba(10, 31, 35, 0.56);
+}
+
+.use-cases-title {
+  font-size: 12px;
+  color: #d7fff8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.use-cases-subtitle {
+  margin-top: 4px;
+  color: #9fcdc6;
+  font-size: 11px;
+}
+
+.use-cases-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.use-case-item {
+  border: 1px solid rgba(124, 199, 187, 0.28);
+  border-radius: 8px;
+  background: rgba(8, 24, 27, 0.58);
+  padding: 8px 9px;
+}
+
+.use-case-item h3 {
+  margin: 0;
+  font-size: 11px;
+  color: #d8fff6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.use-case-item p {
+  margin: 5px 0 0;
+  font-size: 11px;
+  color: #badcd5;
+  line-height: 1.45;
+}

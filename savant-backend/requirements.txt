@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+motor
+PyPDF2
+python-dotenv
+google-generativeai
+elevenlabs
+sentence-transformers
+requests

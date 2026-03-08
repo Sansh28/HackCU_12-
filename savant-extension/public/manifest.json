@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Savant Side Panel",
+  "description": "Codex-style paper context tree panel for research pages.",
+  "version": "0.1.0",
+  "action": {
+    "default_title": "Open Savant Side Panel"
+  },
+  "permissions": ["sidePanel", "tabs", "scripting", "activeTab", "storage"],
+  "host_permissions": [
+    "https://*.researchgate.net/*",
+    "https://arxiv.org/*",
+    "https://*.semanticscholar.org/*",
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
+}
