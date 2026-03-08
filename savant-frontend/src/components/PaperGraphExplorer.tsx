@@ -63,7 +63,7 @@ function GraphCanvas({ graphData, selectedId, onSelectNode }: {
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-  const rootLayoutRef = useRef<d3.HierarchyNode<GraphNode> | null>(null);
+  const rootLayoutRef = useRef<d3.HierarchyPointNode<GraphNode> | null>(null);
 
   useEffect(() => {
     if (!graphData || !svgRef.current) return;
@@ -131,12 +131,10 @@ function GraphCanvas({ graphData, selectedId, onSelectNode }: {
       }
     });
 
-    const root = d3.hierarchy(treeData);
-
     const verticalSpacing = 90;
     const horizontalSpacing = 280;
     const treeLayout = d3.tree<GraphNode>().nodeSize([verticalSpacing, horizontalSpacing]);
-    treeLayout(root);
+    const root = treeLayout(d3.hierarchy(treeData));
 
     rootLayoutRef.current = root;
 
