@@ -161,6 +161,8 @@ def call_gemini(contents: str, system_instruction: str | None = None, require_js
 
     last_status_code = None
     last_error_detail = None
+    data = None
+    
     for attempt in range(GENERATE_MAX_RETRIES + 1):
         try:
             response = requests.post(
