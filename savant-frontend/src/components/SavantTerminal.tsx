@@ -128,8 +128,8 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
       const mapped: ConversationRecord[] = data.conversations.map((item: Record<string, unknown>) => ({
         id: String(item.conversation_id),
         title: String(item.title || "New Chat"),
-        createdAt: new Date(item.created_at || Date.now()).getTime(),
-        updatedAt: new Date(item.updated_at || Date.now()).getTime(),
+        createdAt: new Date((item.created_at as string | number) || Date.now()).getTime(),
+        updatedAt: new Date((item.updated_at as string | number) || Date.now()).getTime(),
         docId: (item.doc_id as string | null | undefined) ?? null,
         fileName: (item.file_name as string | null | undefined) ?? null,
         sessionId: (item.session_id as string | null | undefined) ?? null,
@@ -160,22 +160,22 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
         return;
       }
       try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        const first = newConversation();
-        setConversations([first]);
-        setActiveConversationId(first.id);
-      } else {
-        const parsed = JSON.parse(raw) as ConversationRecord[];
-        if (!Array.isArray(parsed) || parsed.length === 0) {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
           const first = newConversation();
           setConversations([first]);
           setActiveConversationId(first.id);
         } else {
-          setConversations(parsed);
-          setActiveConversationId(parsed[0].id);
+          const parsed = JSON.parse(raw) as ConversationRecord[];
+          if (!Array.isArray(parsed) || parsed.length === 0) {
+            const first = newConversation();
+            setConversations([first]);
+            setActiveConversationId(first.id);
+          } else {
+            setConversations(parsed);
+            setActiveConversationId(parsed[0].id);
+          }
         }
-      }
       } catch {
         const first = newConversation();
         setConversations([first]);
@@ -184,7 +184,7 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
         setStorageReady(true);
       }
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -735,11 +735,10 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
           {filteredConversations.map((conv) => (
             <div
               key={conv.id}
-              className={`w-full text-left rounded border px-3 py-2 transition ${
-                conv.id === activeConversationId
+              className={`w-full text-left rounded border px-3 py-2 transition ${conv.id === activeConversationId
                   ? "bg-[#1b150a]/60 border-[#c19435] text-[#f2f7ff]"
                   : "bg-[#151008]/45 border-[#7a5b1b]/65 text-[#ddb974] hover:text-[#e7f0ff] hover:border-[#b58a2c]"
-              }`}
+                }`}
             >
               {renameConversationId === conv.id ? (
                 <div className="flex items-center gap-2">
