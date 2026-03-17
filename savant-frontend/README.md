@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Savant Frontend
 
-## Getting Started
+This is the Next.js frontend for Savant, the research cockpit that lets users upload papers, ask questions, inspect citations, listen to answers, and explore AI-generated concept graphs.
 
-First, run the development server:
+## Features
+
+- PDF upload workflow tied to backend ingestion
+- Chat-style paper analysis with citations
+- Voice input and audio playback
+- Conversation history and session persistence
+- Paper graph explorer mode for concept navigation
+
+## Requirements
+
+- Node.js 20+
+- npm
+- Running Savant backend at `NEXT_PUBLIC_API_BASE_URL`
+
+## Environment Variables
+
+Copy `.env.example` to `.env.local`:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Set these values:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `NEXT_PUBLIC_API_BASE_URL`
+- `NEXT_PUBLIC_SOLANA_RPC_URL`
+- `NEXT_PUBLIC_MASTER_WALLET`
+- `NEXT_PUBLIC_QUERY_PRICE_SOL`
+- `NEXT_PUBLIC_REQUIRE_SOLANA_PAYMENT`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Development
 
-## Learn More
+```bash
+npm install
+npm run dev -- --hostname 127.0.0.1 --port 3000
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Available Scripts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `npm run dev` starts the development server
+- `npm run build` creates a production build
+- `npm run start` runs the production server
+- `npm run lint` runs ESLint
 
-## Deploy on Vercel
+## Key Directories
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```text
+src/app/                App router entry points and global styles
+src/components/         Savant terminal, graph explorer, background visuals
+public/                 Static assets
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Notes
+
+- The frontend expects the backend to expose upload, query, session, graph, and conversation endpoints
+- If ElevenLabs audio is unavailable, the UI falls back to browser speech synthesis when possible
