@@ -8,7 +8,8 @@ import type {
   PaperUseCase,
 } from "./shared/types";
 
-const SUPPORTED_HOST_RE = /(researchgate\.net|arxiv\.org|semanticscholar\.org)$/i;
+const SUPPORTED_HOST_RE =
+  /(^|\.)((researchgate\.net)|(arxiv\.org)|(semanticscholar\.org)|(openreview\.net)|(ncbi\.nlm\.nih\.gov)|(ieeexplore\.ieee\.org)|(dl\.acm\.org)|(link\.springer\.com))$/i;
 const GRAPH_EXTRACT_URL = "http://127.0.0.1:8000/graph/extract";
 const GRAPH_USE_CASES_URL = "http://127.0.0.1:8000/graph/use-cases";
 
@@ -275,9 +276,25 @@ async function extractPageText(tabId: number): Promise<{ title: string; paperTex
     target: { tabId },
     func: () => {
       const normalize = (text: string): string => text.replace(/\s+/g, " ").trim();
+      const textFromMeta = (selectors: string[]): string => {
+        for (const selector of selectors) {
+          const el = document.querySelector(selector);
+          const value = el?.getAttribute("content");
+          if (value && normalize(value).length > 40) {
+            return normalize(value);
+          }
+        }
+        return "";
+      };
 
       const title =
         normalize((document.querySelector("h1") as HTMLElement | null)?.innerText || "") ||
+        textFromMeta([
+          'meta[name="citation_title"]',
+          'meta[property="og:title"]',
+          'meta[name="dc.title"]',
+          'meta[name="twitter:title"]',
+        ]) ||
         normalize(document.title || "") ||
         "Research Paper";
 
@@ -293,8 +310,22 @@ async function extractPageText(tabId: number): Promise<{ title: string; paperTex
         }
       };
 
+      const metaAbstract = textFromMeta([
+        'meta[name="citation_abstract"]',
+        'meta[name="description"]',
+        'meta[property="og:description"]',
+        'meta[name="dc.description"]',
+        'meta[name="twitter:description"]',
+      ]);
+      if (metaAbstract) {
+        blocks.push(`Abstract: ${metaAbstract}`);
+      }
+
       collect("section.abstract, .abstract, #abstract, [class*='abstract']");
+      collect('[data-test-id*="abstract"], [data-testid*="abstract"], [class*="summary"], [class*="article__abstract"]');
+      collect('section[aria-label*="abstract" i], div[aria-label*="abstract" i]');
       collect("main p, article p, .paper p, [id*='main'] p, .ltx_para");
+      collect(".article-section__content p, .c-article-section p, .abstract-group p, .u-mb-1 p");
       collect("main li, article li");
 
       let paperText = blocks.join("\n\n");
@@ -344,7 +375,7 @@ async function fetchContextTreeFromActiveTab(): Promise<ExtensionResponse> {
   if (!isSupportedUrl(tab.url)) {
     return {
       ok: false,
-      error: "Unsupported page. Open a ResearchGate, arXiv, or Semantic Scholar paper and try again.",
+      error: "Unsupported page. Open a ResearchGate, arXiv, Semantic Scholar, OpenReview, PubMed, IEEE, ACM, or Springer paper and try again.",
     };
   }
 
