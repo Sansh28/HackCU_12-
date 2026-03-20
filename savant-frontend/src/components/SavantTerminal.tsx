@@ -57,6 +57,17 @@ declare global {
 }
 
 const STORAGE_KEY = "savant_conversations_v1";
+const DEFAULT_SUGGESTIONS = [
+  "Summarize the main contribution of this paper.",
+  "What problem is the paper trying to solve?",
+  "What are the key findings and limitations?",
+];
+
+const DOCUMENT_SUGGESTIONS = [
+  "Explain the methodology step by step.",
+  "What datasets, metrics, and baselines are used?",
+  "What are the biggest limitations or open questions?",
+];
 
 const newConversation = (): ConversationRecord => {
   const now = Date.now();
@@ -710,6 +721,32 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
     logsContainerRef.current.scrollTop = (value / 100) * max;
   };
 
+  const suggestedQuestions = useMemo(() => {
+    if (!docId) return DEFAULT_SUGGESTIONS;
+
+    const suggestions = [...DOCUMENT_SUGGESTIONS];
+    if (docMeta?.pageCount && docMeta.pageCount > 8) {
+      suggestions.push("Give me a section-by-section breakdown of the paper.");
+    } else {
+      suggestions.push("Give me a concise executive summary in plain English.");
+    }
+
+    if (citations.length > 0) {
+      suggestions.push("Which evidence in the paper best supports the last answer?");
+    } else {
+      suggestions.push("What evidence from the paper supports the main claims?");
+    }
+
+    return suggestions;
+  }, [citations.length, docId, docMeta?.pageCount]);
+
+  const applySuggestedQuestion = async (suggestion: string) => {
+    setQuery(suggestion);
+    if (!docId || isUploading || isProcessing) return;
+    await runQuery(suggestion);
+    setQuery("");
+  };
+
   return (
     <div className="h-full min-h-[520px] grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-4">
       <aside className="bg-[#0e1728]/45 backdrop-blur-md border border-[#7a5b1b]/70 rounded-xl p-3 flex flex-col min-h-[520px] min-h-0 shadow-[0_10px_28px_rgba(0,0,0,0.35)]">
@@ -992,6 +1029,34 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
                 Copy Share Link
               </button>
             )}
+          </div>
+
+          <div className="rounded-xl border border-[#7a5b1b]/70 bg-[#171109]/45 p-3 backdrop-blur-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#c8a55b]">Question Suggestions</div>
+                <div className="mt-1 text-xs text-[#d9c087]">
+                  {docId ? "Click a prompt to ask about the current paper instantly." : "Upload a paper to unlock paper-aware suggested prompts."}
+                </div>
+              </div>
+              <div className="text-[10px] font-mono text-[#8ea3c7]">
+                {docId ? "Paper-aware" : "Starter"}
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {suggestedQuestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => void applySuggestedQuestion(suggestion)}
+                  disabled={isUploading || isProcessing}
+                  className="rounded-full border border-[#8d6a20] bg-[#111922]/80 px-3 py-2 text-left text-xs font-mono text-[#f2e1b7] transition hover:border-[#f2c14e] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
           </div>
 
           <form onSubmit={handleQuerySubmit} className="flex flex-col gap-2">
