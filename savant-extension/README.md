@@ -24,8 +24,14 @@ This Chrome extension adds a Savant side panel for research pages and builds a c
 
 - Node.js 20+
 - npm
-- Savant backend running at `http://127.0.0.1:8000`
+- Savant backend running and reachable from the configured API base URL
 - Google Chrome or another Chromium browser with extension developer mode
+
+## Environment
+
+Copy `.env.example` to `.env` to override the backend URL used at build time.
+
+- `VITE_SAVANT_API_BASE_URL` defaults to `http://127.0.0.1:8000`
 
 ## Development
 
@@ -59,6 +65,6 @@ public/manifest.json    Extension manifest
 
 ## Notes
 
-- The manifest already includes localhost permissions for the Savant backend
+- The manifest currently includes localhost permissions for the Savant backend
 - The side panel is enabled only on supported research domains
 - Extraction now also checks common publisher meta tags and abstract containers for better coverage across academic sites

@@ -60,6 +60,7 @@ Required backend variables:
 - `MASTER_WALLET`
 - `QUERY_PRICE_SOL`
 - `REQUIRE_SOLANA_PAYMENT`
+- `CORS_ALLOW_ORIGINS`
 
 ### 2. Frontend
 
@@ -75,7 +76,11 @@ Required frontend variables:
 
 ### 3. Extension
 
-The extension currently calls the backend at `http://127.0.0.1:8000`. Make sure the backend is running locally before testing the side panel.
+Copy `savant-extension/.env.example` to `savant-extension/.env` to override the backend URL used by the extension build.
+
+Extension variable:
+
+- `VITE_SAVANT_API_BASE_URL`
 
 ## MongoDB Atlas Vector Index
 
