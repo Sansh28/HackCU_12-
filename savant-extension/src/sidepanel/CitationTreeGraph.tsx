@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { API_BASE_URL } from "../shared/config";
 import type { ContextEdge, ContextNode, GraphCategory } from "../shared/types";
 
 type Props = {
@@ -240,7 +241,7 @@ export function CitationTreeGraph({ nodes, edges, paperText }: Props) {
     }));
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/graph/ask", {
+      const res = await fetch(`${API_BASE_URL}/graph/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

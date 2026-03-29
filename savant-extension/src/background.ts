@@ -7,10 +7,11 @@ import type {
   GraphCategory,
   PaperUseCase,
 } from "./shared/types";
+import { API_BASE_URL } from "./shared/config";
 
 const SUPPORTED_HOST_RE = /(researchgate\.net|arxiv\.org|semanticscholar\.org)$/i;
-const GRAPH_EXTRACT_URL = "http://127.0.0.1:8000/graph/extract";
-const GRAPH_USE_CASES_URL = "http://127.0.0.1:8000/graph/use-cases";
+const GRAPH_EXTRACT_URL = `${API_BASE_URL}/graph/extract`;
+const GRAPH_USE_CASES_URL = `${API_BASE_URL}/graph/use-cases`;
 
 function isSupportedUrl(url?: string): boolean {
   if (!url) return false;

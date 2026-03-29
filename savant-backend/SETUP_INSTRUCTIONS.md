@@ -12,6 +12,7 @@ Create a `.env` file in both `/savant-frontend` and `/savant-backend` using each
 - `MASTER_WALLET`
 - `QUERY_PRICE_SOL`
 - `REQUIRE_SOLANA_PAYMENT`
+- `CORS_ALLOW_ORIGINS`
 
 ### Frontend required
 - `NEXT_PUBLIC_API_BASE_URL`
@@ -42,7 +43,7 @@ Name the index: `vector_index`.
 ### Backend
 ```bash
 cd savant-backend
-source venv/bin/activate
+venv\Scripts\activate
 uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 

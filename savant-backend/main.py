@@ -1,14 +1,16 @@
-from datetime import datetime, timezone
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-import os
+import asyncio
 import io
 import json
+import os
 import re
 import time
 import uuid
-import requests
+from datetime import datetime, timezone
+
+import httpx
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from google import genai
@@ -42,12 +44,17 @@ GENERATE_RETRY_BASE_SECONDS = float(os.getenv("GENERATE_RETRY_BASE_SECONDS", "1.
 GENERATE_RETRY_MAX_SECONDS = float(os.getenv("GENERATE_RETRY_MAX_SECONDS", "45.0"))
 ALLOW_GENERATE_LOCAL_FALLBACK = os.getenv("ALLOW_GENERATE_LOCAL_FALLBACK", "true").lower() in {"1", "true", "yes"}
 _LAST_EMBED_TS = 0.0
+CORS_ALLOW_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",")
+    if origin.strip()
+]
 
 app = FastAPI(title="Savant API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For dev only, restrict in production
+    allow_origins=CORS_ALLOW_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -147,7 +154,25 @@ class ChatConversationRenameRequest(BaseModel):
 VALID_GRAPH_CATEGORIES = {"foundation", "method", "result", "component", "concept"}
 
 
-def call_gemini(contents: str, system_instruction: str | None = None, require_json: bool = False) -> str:
+def _extract_retry_delay_seconds(error_data: dict | None, attempt: int, base_seconds: float, max_seconds: float) -> float:
+    retry_delay_s = None
+    details = error_data.get("error", {}).get("details", []) if isinstance(error_data, dict) else []
+    for detail in details if isinstance(details, list) else []:
+        if isinstance(detail, dict) and "retryDelay" in detail:
+            value = str(detail.get("retryDelay", "")).strip().lower()
+            if value.endswith("s"):
+                try:
+                    retry_delay_s = float(value[:-1])
+                except ValueError:
+                    retry_delay_s = None
+            break
+
+    if retry_delay_s is None:
+        return min(base_seconds * (2 ** attempt), max_seconds)
+    return min(retry_delay_s, max_seconds)
+
+
+async def call_gemini(contents: str, system_instruction: str | None = None, require_json: bool = False) -> str:
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=500, detail="Gemini API not configured")
 
@@ -163,59 +188,47 @@ def call_gemini(contents: str, system_instruction: str | None = None, require_js
     last_error_detail = None
     data = None
     
-    for attempt in range(GENERATE_MAX_RETRIES + 1):
-        try:
-            response = requests.post(
-                f"{GEMINI_GENERATE_URL}?key={GEMINI_API_KEY}",
-                json=payload,
-                timeout=45,
-            )
-            if response.status_code == 429:
-                last_status_code = 429
-                try:
-                    error_data = response.json()
-                except ValueError:
-                    error_data = {}
-                last_error_detail = error_data
+    async with httpx.AsyncClient(timeout=45) as http_client:
+        for attempt in range(GENERATE_MAX_RETRIES + 1):
+            try:
+                response = await http_client.post(
+                    f"{GEMINI_GENERATE_URL}?key={GEMINI_API_KEY}",
+                    json=payload,
+                )
+                if response.status_code == 429:
+                    last_status_code = 429
+                    try:
+                        error_data = response.json()
+                    except ValueError:
+                        error_data = {}
+                    last_error_detail = error_data
 
-                if attempt >= GENERATE_MAX_RETRIES:
-                    break
-
-                retry_delay_s = None
-                details = error_data.get("error", {}).get("details", []) if isinstance(error_data, dict) else []
-                for detail in details if isinstance(details, list) else []:
-                    if isinstance(detail, dict) and "retryDelay" in detail:
-                        value = str(detail.get("retryDelay", "")).strip().lower()
-                        if value.endswith("s"):
-                            try:
-                                retry_delay_s = float(value[:-1])
-                            except ValueError:
-                                retry_delay_s = None
+                    if attempt >= GENERATE_MAX_RETRIES:
                         break
 
-                if retry_delay_s is None:
-                    retry_delay_s = min(GENERATE_RETRY_BASE_SECONDS * (2 ** attempt), GENERATE_RETRY_MAX_SECONDS)
-                else:
-                    retry_delay_s = min(retry_delay_s, GENERATE_RETRY_MAX_SECONDS)
+                    await asyncio.sleep(
+                        _extract_retry_delay_seconds(
+                            error_data,
+                            attempt,
+                            GENERATE_RETRY_BASE_SECONDS,
+                            GENERATE_RETRY_MAX_SECONDS,
+                        )
+                    )
+                    continue
 
-                time.sleep(retry_delay_s)
-                continue
-
-            response.raise_for_status()
-            data = response.json()
-            break
-        except requests.RequestException as exc:
-            status_code = getattr(getattr(exc, "response", None), "status_code", None)
-            if status_code == 429:
-                last_status_code = 429
-                if attempt >= GENERATE_MAX_RETRIES:
-                    break
-                time.sleep(min(GENERATE_RETRY_BASE_SECONDS * (2 ** attempt), GENERATE_RETRY_MAX_SECONDS))
-                continue
-            raise HTTPException(status_code=502, detail=f"Gemini request failed: {exc}") from exc
-    else:
-        data = None
-
+                response.raise_for_status()
+                data = response.json()
+                break
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 429:
+                    last_status_code = 429
+                    if attempt >= GENERATE_MAX_RETRIES:
+                        break
+                    await asyncio.sleep(min(GENERATE_RETRY_BASE_SECONDS * (2 ** attempt), GENERATE_RETRY_MAX_SECONDS))
+                    continue
+                raise HTTPException(status_code=502, detail=f"Gemini request failed: {exc}") from exc
+            except httpx.RequestError as exc:
+                raise HTTPException(status_code=502, detail=f"Gemini request failed: {exc}") from exc
     if last_status_code == 429 and not data:
         detail_msg = (
             "Gemini text-generation quota exceeded. Wait ~1 minute and retry, switch API key/project, "
@@ -434,7 +447,7 @@ def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> list[st
     return chunks
 
 
-def _embed_via_rest(text: str) -> list[float]:
+async def _embed_via_rest(text: str) -> list[float]:
     global _LAST_EMBED_TS
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -442,53 +455,52 @@ def _embed_via_rest(text: str) -> list[float]:
 
     last_status_code = None
 
-    for attempt in range(EMBED_MAX_RETRIES + 1):
-        try:
-            if EMBED_MIN_INTERVAL_SECONDS > 0:
-                now = time.monotonic()
-                elapsed = now - _LAST_EMBED_TS
-                if elapsed < EMBED_MIN_INTERVAL_SECONDS:
-                    time.sleep(EMBED_MIN_INTERVAL_SECONDS - elapsed)
-                _LAST_EMBED_TS = time.monotonic()
+    async with httpx.AsyncClient(timeout=EMBED_REQUEST_TIMEOUT_SECONDS) as http_client:
+        for attempt in range(EMBED_MAX_RETRIES + 1):
+            try:
+                if EMBED_MIN_INTERVAL_SECONDS > 0:
+                    now = time.monotonic()
+                    elapsed = now - _LAST_EMBED_TS
+                    if elapsed < EMBED_MIN_INTERVAL_SECONDS:
+                        await asyncio.sleep(EMBED_MIN_INTERVAL_SECONDS - elapsed)
+                    _LAST_EMBED_TS = time.monotonic()
 
-            r = requests.post(
-                f"{GEMINI_EMBED_URL}?key={api_key}",
-                json={"content": {"parts": [{"text": text}]}},
-                timeout=EMBED_REQUEST_TIMEOUT_SECONDS,
-            )
+                response = await http_client.post(
+                    f"{GEMINI_EMBED_URL}?key={api_key}",
+                    json={"content": {"parts": [{"text": text}]}},
+                )
 
-            if r.status_code == 429:
-                last_status_code = 429
-                if attempt >= EMBED_MAX_RETRIES:
-                    break
-                retry_after = r.headers.get("Retry-After")
-                if retry_after:
-                    try:
-                        sleep_seconds = min(float(retry_after), EMBED_RETRY_MAX_SECONDS)
-                    except ValueError:
+                if response.status_code == 429:
+                    last_status_code = 429
+                    if attempt >= EMBED_MAX_RETRIES:
+                        break
+                    retry_after = response.headers.get("Retry-After")
+                    if retry_after:
+                        try:
+                            sleep_seconds = min(float(retry_after), EMBED_RETRY_MAX_SECONDS)
+                        except ValueError:
+                            sleep_seconds = min(EMBED_RETRY_BASE_SECONDS * (2 ** attempt), EMBED_RETRY_MAX_SECONDS)
+                    else:
                         sleep_seconds = min(EMBED_RETRY_BASE_SECONDS * (2 ** attempt), EMBED_RETRY_MAX_SECONDS)
-                else:
-                    sleep_seconds = min(EMBED_RETRY_BASE_SECONDS * (2 ** attempt), EMBED_RETRY_MAX_SECONDS)
-                time.sleep(sleep_seconds)
-                continue
+                    await asyncio.sleep(sleep_seconds)
+                    continue
 
-            r.raise_for_status()
-            data = r.json()
+                response.raise_for_status()
+                data = response.json()
 
-            if "embedding" in data:
-                return data["embedding"]["values"]
-            return data["embeddings"][0]["values"]
-        except requests.RequestException as exc:
-            response = getattr(exc, "response", None)
-            status_code = getattr(response, "status_code", None)
-            if status_code == 429:
-                last_status_code = 429
-                if attempt >= EMBED_MAX_RETRIES:
-                    break
-                sleep_seconds = min(EMBED_RETRY_BASE_SECONDS * (2 ** attempt), EMBED_RETRY_MAX_SECONDS)
-                time.sleep(sleep_seconds)
-                continue
-            raise
+                if "embedding" in data:
+                    return data["embedding"]["values"]
+                return data["embeddings"][0]["values"]
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 429:
+                    last_status_code = 429
+                    if attempt >= EMBED_MAX_RETRIES:
+                        break
+                    await asyncio.sleep(min(EMBED_RETRY_BASE_SECONDS * (2 ** attempt), EMBED_RETRY_MAX_SECONDS))
+                    continue
+                raise HTTPException(status_code=502, detail=f"Embedding request failed: {exc}") from exc
+            except httpx.RequestError as exc:
+                raise HTTPException(status_code=502, detail=f"Embedding request failed: {exc}") from exc
 
     if last_status_code == 429:
         raise HTTPException(
@@ -546,7 +558,7 @@ def _hybrid_rerank(prompt: str, candidates: list[dict], limit: int = 5) -> list[
     return deduped
 
 
-def _verify_solana_payment(signature: str, payer_pubkey: str) -> dict:
+async def _verify_solana_payment(signature: str, payer_pubkey: str) -> dict:
     if not MASTER_WALLET:
         raise HTTPException(status_code=500, detail="MASTER_WALLET is not configured")
 
@@ -564,9 +576,15 @@ def _verify_solana_payment(signature: str, payer_pubkey: str) -> dict:
         ],
     }
 
-    rpc_res = requests.post(SOLANA_RPC_URL, json=payload, timeout=20)
-    rpc_res.raise_for_status()
-    rpc_data = rpc_res.json()
+    try:
+        async with httpx.AsyncClient(timeout=20) as http_client:
+            rpc_res = await http_client.post(SOLANA_RPC_URL, json=payload)
+            rpc_res.raise_for_status()
+            rpc_data = rpc_res.json()
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Solana RPC request failed: {exc}") from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"Solana RPC request failed: {exc}") from exc
 
     tx = rpc_data.get("result")
     if not tx:
@@ -656,18 +674,15 @@ async def graph_extract(request: GraphExtractRequest):
     )
 
     try:
-        raw = call_gemini(prompt, system_instruction=system_instruction, require_json=True)
+        raw = await call_gemini(prompt, system_instruction=system_instruction, require_json=True)
         parsed = json.loads(raw)
     except json.JSONDecodeError:
         # One retry without assuming model followed MIME strictly.
-        raw_retry = call_gemini(prompt + "\n\nReturn pure JSON only.", system_instruction=system_instruction, require_json=True)
+        raw_retry = await call_gemini(prompt + "\n\nReturn pure JSON only.", system_instruction=system_instruction, require_json=True)
         try:
             parsed = json.loads(raw_retry)
         except json.JSONDecodeError as exc:
             raise HTTPException(status_code=502, detail="Gemini returned invalid JSON for graph extraction") from exc
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"Gemini request failed: {exc}") from exc
-
     return _validate_graph_payload(parsed)
 
 
@@ -700,10 +715,10 @@ async def graph_use_cases(request: GraphUseCasesRequest):
     )
 
     try:
-        raw = call_gemini(prompt, system_instruction=system_instruction, require_json=True)
+        raw = await call_gemini(prompt, system_instruction=system_instruction, require_json=True)
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        raw_retry = call_gemini(
+        raw_retry = await call_gemini(
             prompt + "\n\nReturn pure JSON only.",
             system_instruction=system_instruction,
             require_json=True,
@@ -712,9 +727,6 @@ async def graph_use_cases(request: GraphUseCasesRequest):
             parsed = json.loads(raw_retry)
         except json.JSONDecodeError as exc:
             raise HTTPException(status_code=502, detail="Gemini returned invalid JSON for use-case extraction") from exc
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"Gemini request failed: {exc}") from exc
-
     return {"use_cases": _validate_use_cases_payload(parsed)}
 
 
@@ -791,10 +803,7 @@ async def graph_ask(request: GraphAskRequest):
         "Answer clearly in 4-8 sentences."
     )
 
-    try:
-        answer = call_gemini(prompt, system_instruction=system_instruction, require_json=False)
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"Gemini request failed: {exc}") from exc
+    answer = await call_gemini(prompt, system_instruction=system_instruction, require_json=False)
 
     if request.session_id and request.node_id and client:
         now = datetime.now(timezone.utc)
@@ -1018,7 +1027,7 @@ async def upload_document(file: UploadFile = File(...)):
                     capped = True
                     break
                 try:
-                    embedding = _embed_via_rest(chunk)
+                    embedding = await _embed_via_rest(chunk)
                     insert_data.append(
                         {
                             "doc_id": doc_id,
@@ -1131,7 +1140,7 @@ async def query_savant(request: QueryRequest):
             if existing:
                 raise HTTPException(status_code=402, detail="Payment signature already used")
 
-            payment_info = _verify_solana_payment(request.payment_signature, request.payer_pubkey)
+            payment_info = await _verify_solana_payment(request.payment_signature, request.payer_pubkey)
             payment_verify_ms = (time.perf_counter() - payment_start) * 1000
 
             await payments_collection.insert_one(
@@ -1151,7 +1160,7 @@ async def query_savant(request: QueryRequest):
         embed_ms = 0.0
         retrieval_mode = "hybrid"
         try:
-            query_embedding = _embed_via_rest(request.prompt)
+            query_embedding = await _embed_via_rest(request.prompt)
             embed_ms = (time.perf_counter() - embed_start) * 1000
         except HTTPException as embed_exc:
             if embed_exc.status_code == 429 and EMBED_ALLOW_LEXICAL_FALLBACK:
@@ -1231,7 +1240,7 @@ async def query_savant(request: QueryRequest):
         llm_start = time.perf_counter()
         llm_fallback = False
         try:
-            answer_text = call_gemini(full_prompt, require_json=False)
+            answer_text = await call_gemini(full_prompt, require_json=False)
         except HTTPException as llm_exc:
             if llm_exc.status_code == 429 and ALLOW_GENERATE_LOCAL_FALLBACK:
                 llm_fallback = True
