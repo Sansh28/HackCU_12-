@@ -11,6 +11,11 @@
     "https://*.researchgate.net/*",
     "https://arxiv.org/*",
     "https://*.semanticscholar.org/*",
+    "https://openreview.net/*",
+    "https://pubmed.ncbi.nlm.nih.gov/*",
+    "https://ieeexplore.ieee.org/*",
+    "https://dl.acm.org/*",
+    "https://link.springer.com/*",
     "http://127.0.0.1:8000/*",
     "http://localhost:8000/*"
   ],
