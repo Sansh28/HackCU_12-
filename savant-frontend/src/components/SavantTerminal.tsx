@@ -762,7 +762,7 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
         />
 
         {(isPlaying || isPaused) && (
-          <VoicePlaybackPanel isPaused={isPaused} waveHeights={waveHeights} onPause={pauseVoice} onResume={resumeVoice} onStop={stopVoice} />
+          <VoicePlaybackPanel isPaused={isPaused} waveHeights={waveHeights} pauseVoice={pauseVoice} resumeVoice={resumeVoice} stopVoice={stopVoice} />
         )}
 
         <audio
@@ -794,7 +794,7 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
             isProcessing={isProcessing}
             isUploading={isUploading}
             suggestedQuestions={suggestedQuestions}
-            onApplySuggestion={(suggestion) => void applySuggestedQuestion(suggestion)}
+            applySuggestedQuestion={applySuggestedQuestion}
           />
 
           <QueryComposer
