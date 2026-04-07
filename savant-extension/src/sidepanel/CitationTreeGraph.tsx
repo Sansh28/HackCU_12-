@@ -116,7 +116,7 @@ function layoutNodes(nodes: ContextNode[], edges: ContextEdge[], width: number, 
 }
 
 function truncate(value: string, len = 26): string {
-  return value.length > len ? `${value.slice(0, len - 1)}…` : value;
+  return value.length > len ? `${value.slice(0, len - 1)}...` : value;
 }
 
 function splitLabel(value: string): [string, string?] {

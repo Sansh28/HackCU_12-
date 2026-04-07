@@ -9,7 +9,8 @@ import type {
 } from "./shared/types";
 import { API_BASE_URL } from "./shared/config";
 
-const SUPPORTED_HOST_RE = /(researchgate\.net|arxiv\.org|semanticscholar\.org)$/i;
+const SUPPORTED_HOST_RE =
+  /(^|\.)((researchgate\.net)|(arxiv\.org)|(semanticscholar\.org)|(openreview\.net)|(ncbi\.nlm\.nih\.gov)|(ieeexplore\.ieee\.org)|(dl\.acm\.org)|(link\.springer\.com))$/i;
 const GRAPH_EXTRACT_URL = `${API_BASE_URL}/graph/extract`;
 const GRAPH_USE_CASES_URL = `${API_BASE_URL}/graph/use-cases`;
 
@@ -345,7 +346,8 @@ async function fetchContextTreeFromActiveTab(): Promise<ExtensionResponse> {
   if (!isSupportedUrl(tab.url)) {
     return {
       ok: false,
-      error: "Unsupported page. Open a ResearchGate, arXiv, or Semantic Scholar paper and try again.",
+      error:
+        "Unsupported page. Open a supported paper page such as ResearchGate, arXiv, Semantic Scholar, OpenReview, NCBI, IEEE Xplore, ACM DL, or Springer.",
     };
   }
 

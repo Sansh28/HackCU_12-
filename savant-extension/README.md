@@ -7,6 +7,11 @@ This Chrome extension adds a Savant side panel for research pages and builds a c
 - ResearchGate
 - arXiv
 - Semantic Scholar
+- OpenReview
+- NCBI
+- IEEE Xplore
+- ACM Digital Library
+- Springer
 
 ## What It Does
 
@@ -60,5 +65,5 @@ public/manifest.json    Extension manifest
 
 ## Notes
 
-- The manifest currently includes localhost permissions for the Savant backend
+- The manifest includes localhost backend permissions plus the supported research domains above
 - The side panel is enabled only on supported research domains

@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { SavantTerminal } from "@/components/SavantTerminal";
 import { PaperGraphExplorer } from "@/components/PaperGraphExplorer";
 import { FloatingNodesBackground } from "@/components/FloatingNodesBackground";
+import { savantFetch } from "@/lib/api";
 
 type Mode = "assistant" | "graph";
 type GraphPayload = {
@@ -28,7 +29,6 @@ type GraphStateByConversation = Record<
 >;
 
 export default function Home() {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
   const [mode, setMode] = useState<Mode>("assistant");
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [graphByConversation, setGraphByConversation] = useState<GraphStateByConversation>({});
@@ -50,7 +50,7 @@ export default function Home() {
         },
       }));
 
-      const contextRes = await fetch(`${apiBase}/documents/${docId}/context`);
+      const contextRes = await savantFetch(`/documents/${docId}/context`);
       const contextData = await contextRes.json();
       if (!contextRes.ok) {
         throw new Error(contextData.detail || "Failed to load uploaded document context");
@@ -61,7 +61,7 @@ export default function Home() {
         throw new Error("Uploaded document has no extractable text for graph generation");
       }
 
-      const graphRes = await fetch(`${apiBase}/graph/extract`, {
+      const graphRes = await savantFetch("/graph/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ paper_text: paperText }),
@@ -96,7 +96,7 @@ export default function Home() {
         inFlightGraphKeyRef.current = null;
       }
     }
-  }, [apiBase]);
+  }, []);
 
   const handleConversationChange = useCallback(
     ({ conversationId, docId }: { conversationId: string; docId: string | null }) => {

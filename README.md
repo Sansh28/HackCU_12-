@@ -25,7 +25,7 @@ HackCU_12--main/
 - Save chat sessions and share them across users
 - Optional Solana payment gating before query execution
 - Voice input plus ElevenLabs or browser TTS playback
-- Chrome extension support for ResearchGate, arXiv, and Semantic Scholar
+- Chrome extension support for ResearchGate, arXiv, Semantic Scholar, OpenReview, NCBI, IEEE Xplore, ACM DL, and Springer
 
 ## Tech Stack
 
@@ -158,6 +158,7 @@ If this folder is already inside another Git repository, create the GitHub remot
 
 ## Notes
 
+- `ARCHITECTURE.md` provides a system-level overview and recommended refactor phases
 - `savant-frontend/README.md` now contains app-specific frontend setup details
 - `savant-extension/README.md` documents how to build and load the browser extension
 - No license file was added because license choice is a product decision and should match how you want others to use the code

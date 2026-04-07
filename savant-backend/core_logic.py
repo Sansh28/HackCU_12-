@@ -96,3 +96,48 @@ def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> list[st
         start += chunk_size - overlap
 
     return chunks
+
+
+def fallback_chunks_for_prompt(prompt: str, docs: list[dict], limit: int = 5) -> list[dict]:
+    tokens = [token for token in re.findall(r"[a-zA-Z0-9]+", prompt.lower()) if len(token) > 2]
+    if not tokens:
+        return docs[:limit]
+
+    scored_docs = []
+    for doc in docs:
+        text = str(doc.get("text", "")).lower()
+        score = sum(text.count(token) for token in tokens)
+        scored_docs.append((score, doc))
+
+    scored_docs.sort(key=lambda item: item[0], reverse=True)
+    positive_scored = [doc for score, doc in scored_docs if score > 0]
+    if positive_scored:
+        return positive_scored[:limit]
+    return docs[:limit]
+
+
+def hybrid_rerank(prompt: str, candidates: list[dict], limit: int = 5) -> list[dict]:
+    tokens = [token for token in re.findall(r"[a-zA-Z0-9]+", prompt.lower()) if len(token) > 2]
+
+    ranked: list[tuple[float, dict]] = []
+    for candidate in candidates:
+        text = str(candidate.get("text", "")).lower()
+        lexical_score = sum(text.count(token) for token in tokens)
+        vector_score = float(candidate.get("score", 0))
+        final_score = (vector_score * 4.0) + lexical_score
+        ranked.append((final_score, candidate))
+
+    ranked.sort(key=lambda pair: pair[0], reverse=True)
+
+    deduped: list[dict] = []
+    seen_keys: set[tuple] = set()
+    for _, doc in ranked:
+        key = (doc.get("doc_id"), doc.get("chunk_index"), doc.get("page_number"))
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        deduped.append(doc)
+        if len(deduped) >= limit:
+            break
+
+    return deduped

@@ -1,6 +1,13 @@
 import unittest
 
-from core_logic import chunk_text, enforce_dag_edges, extract_retry_delay_seconds, local_answer_from_context
+from core_logic import (
+    chunk_text,
+    enforce_dag_edges,
+    extract_retry_delay_seconds,
+    fallback_chunks_for_prompt,
+    hybrid_rerank,
+    local_answer_from_context,
+)
 
 
 class BackendCoreLogicTests(unittest.TestCase):
@@ -52,6 +59,28 @@ class BackendCoreLogicTests(unittest.TestCase):
 
         self.assertIn("context-only fallback answer", answer)
         self.assertIn("Positional encoding", answer)
+
+    def test_fallback_chunks_prefers_keyword_matches(self):
+        docs = [
+            {"text": "This chunk is about datasets and evaluation."},
+            {"text": "This chunk describes the transformer architecture in detail."},
+            {"text": "This chunk is generic filler text."},
+        ]
+
+        ranked = fallback_chunks_for_prompt("How does the transformer architecture work?", docs, limit=2)
+
+        self.assertEqual(len(ranked), 1)
+        self.assertIn("transformer architecture", ranked[0]["text"])
+
+    def test_hybrid_rerank_prefers_combined_vector_and_lexical_signal(self):
+        candidates = [
+            {"doc_id": "1", "page_number": 1, "chunk_index": 0, "text": "transformer attention architecture", "score": 0.8},
+            {"doc_id": "1", "page_number": 2, "chunk_index": 1, "text": "generic baseline comparison", "score": 0.9},
+        ]
+
+        ranked = hybrid_rerank("transformer architecture", candidates, limit=2)
+
+        self.assertEqual(ranked[0]["chunk_index"], 0)
 
 
 if __name__ == "__main__":
