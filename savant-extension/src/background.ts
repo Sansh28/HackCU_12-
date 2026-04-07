@@ -277,9 +277,25 @@ async function extractPageText(tabId: number): Promise<{ title: string; paperTex
     target: { tabId },
     func: () => {
       const normalize = (text: string): string => text.replace(/\s+/g, " ").trim();
+      const textFromMeta = (selectors: string[]): string => {
+        for (const selector of selectors) {
+          const el = document.querySelector(selector);
+          const value = el?.getAttribute("content");
+          if (value && normalize(value).length > 40) {
+            return normalize(value);
+          }
+        }
+        return "";
+      };
 
       const title =
         normalize((document.querySelector("h1") as HTMLElement | null)?.innerText || "") ||
+        textFromMeta([
+          'meta[name="citation_title"]',
+          'meta[property="og:title"]',
+          'meta[name="dc.title"]',
+          'meta[name="twitter:title"]',
+        ]) ||
         normalize(document.title || "") ||
         "Research Paper";
 
@@ -295,8 +311,22 @@ async function extractPageText(tabId: number): Promise<{ title: string; paperTex
         }
       };
 
+      const metaAbstract = textFromMeta([
+        'meta[name="citation_abstract"]',
+        'meta[name="description"]',
+        'meta[property="og:description"]',
+        'meta[name="dc.description"]',
+        'meta[name="twitter:description"]',
+      ]);
+      if (metaAbstract) {
+        blocks.push(`Abstract: ${metaAbstract}`);
+      }
+
       collect("section.abstract, .abstract, #abstract, [class*='abstract']");
+      collect('[data-test-id*="abstract"], [data-testid*="abstract"], [class*="summary"], [class*="article__abstract"]');
+      collect('section[aria-label*="abstract" i], div[aria-label*="abstract" i]');
       collect("main p, article p, .paper p, [id*='main'] p, .ltx_para");
+      collect(".article-section__content p, .c-article-section p, .abstract-group p, .u-mb-1 p");
       collect("main li, article li");
 
       let paperText = blocks.join("\n\n");
