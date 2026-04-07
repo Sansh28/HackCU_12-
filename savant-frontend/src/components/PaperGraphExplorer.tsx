@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as d3 from "d3";
+import { API_BASE_URL } from "@/lib/config";
+import { savantFetch } from "@/lib/api";
 
 type GraphNode = {
   id: string;
@@ -42,10 +44,10 @@ Multi-Head Attention: Instead of performing a single attention function with dke
 
 Positional Encoding: Since our model contains no recurrence and no convolution, in order for the model to make use of the order of the sequence, we must inject some information about the relative or absolute position of the tokens in the sequence.`;
 const LOADING_STEPS = [
-  "Reading paper structure…",
-  "Extracting key concepts…",
-  "Mapping relationships…",
-  "Building your graph…",
+  "Reading paper structure...",
+  "Extracting key concepts...",
+  "Mapping relationships...",
+  "Building your graph...",
 ];
 
 const categoryColors = {
@@ -312,7 +314,7 @@ function ConceptCard({
 
     try {
       const history = qaList.map((qa) => ({ question: qa.question, answer: qa.answer }));
-      const res = await fetch(`${apiBase}/graph/ask`, {
+      const res = await savantFetch("/graph/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -562,7 +564,7 @@ function ConceptCard({
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && void handleAsk()}
-            placeholder={`Ask about ${node.label}…`}
+            placeholder={`Ask about ${node.label}...`}
             style={{
               flex: 1,
               background: "rgba(255,255,255,0.05)",
@@ -674,7 +676,7 @@ function InputScreen({ onAnalyze, loading }: { onAnalyze: (text: string) => void
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Paste your research paper text here…"
+          placeholder="Paste your research paper text here..."
           style={{
             width: "100%",
             height: "220px",
@@ -713,7 +715,7 @@ function InputScreen({ onAnalyze, loading }: { onAnalyze: (text: string) => void
               boxShadow: "0 0 30px rgba(99,102,241,0.3)",
             }}
           >
-            {loading ? "Analyzing paper…" : "Analyze Paper →"}
+            {loading ? "Analyzing paper..." : "Analyze Paper ->"}
           </button>
           <button
             onClick={() => onAnalyze(SAMPLE_PAPER)}
@@ -778,8 +780,6 @@ export function PaperGraphExplorer({
   backgroundStatus = "idle",
   backgroundError = null,
 }: PaperGraphExplorerProps) {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
-
   const [stage, setStage] = useState<"input" | "loading" | "graph">("input");
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [paperText, setPaperText] = useState("");
@@ -794,7 +794,7 @@ export function PaperGraphExplorer({
       setStage("loading");
       setError(null);
       try {
-        const res = await fetch(`${apiBase}/graph/extract`, {
+        const res = await savantFetch("/graph/extract", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ paper_text: text }),
@@ -809,7 +809,7 @@ export function PaperGraphExplorer({
         setStage("input");
       }
     },
-    [apiBase]
+    []
   );
 
   useEffect(() => {
@@ -821,7 +821,7 @@ export function PaperGraphExplorer({
     const run = async () => {
       try {
         setStage("loading");
-        const contextRes = await fetch(`${apiBase}/documents/${autoDocId}/context`);
+        const contextRes = await savantFetch(`/documents/${autoDocId}/context`);
         const contextData = await contextRes.json();
         if (!contextRes.ok) throw new Error(contextData.detail || "Failed to fetch uploaded document context");
         if (cancelled) return;
@@ -839,7 +839,7 @@ export function PaperGraphExplorer({
     return () => {
       cancelled = true;
     };
-  }, [apiBase, autoDocId, handleAnalyze]);
+  }, [autoDocId, handleAnalyze]);
 
   useEffect(() => {
     if (!prefetchedGraph) return;
@@ -933,7 +933,7 @@ export function PaperGraphExplorer({
             zIndex: 100,
           }}
         >
-          ⚠ {error}
+          Warning: {error}
         </div>
       )}
 
@@ -944,7 +944,7 @@ export function PaperGraphExplorer({
           <div style={{ width: "100%", height: "100%", position: "relative" }}>
             <GraphCanvas graphData={graphData} selectedId={selectedNode?.id || null} onSelectNode={setSelectedNode} />
             <Legend />
-            {selectedNode && <ConceptCard node={selectedNode} paperText={paperText} onClose={() => setSelectedNode(null)} apiBase={apiBase} />}
+            {selectedNode && <ConceptCard node={selectedNode} paperText={paperText} onClose={() => setSelectedNode(null)} apiBase={API_BASE_URL} />}
           </div>
         )}
       </div>
