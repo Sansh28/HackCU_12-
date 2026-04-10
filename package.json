@@ -1,9 +1,6 @@
 {
   "name": "hackcu-12-monorepo",
   "private": true,
-  "workspaces": [
-    "apps/frontend"
-  ],
   "scripts": {
     "build": "npm --prefix apps/frontend run build",
     "dev": "npm --prefix apps/frontend run dev",
