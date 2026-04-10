@@ -8,11 +8,17 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+coverage/
 
 # Node
 node_modules/
 .next/
 dist/
+coverage-final.json
 
 # Env/secrets
 .env
@@ -27,3 +33,6 @@ yarn-debug.log*
 
 # Misc
 root-password
+data/
+*.pkl
+*.sqlite3
