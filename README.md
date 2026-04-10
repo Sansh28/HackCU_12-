@@ -6,6 +6,44 @@ Savant is a research assistant platform built during HackCU that helps users exp
 - A Next.js frontend for document chat, voice interaction, citations, and graph exploration
 - A Chrome side panel extension for generating concept trees from research pages
 
+## Project Workflow
+
+The project runs as one shared research pipeline: the frontend and extension both send paper context into the backend, and the backend coordinates document processing, retrieval, graph generation, persistence, and optional payment checks.
+
+```mermaid
+flowchart TD
+    U[User] --> F[Next.js Frontend]
+    U --> E[Chrome Extension]
+
+    F -->|Upload PDF / ask questions / explore graph| B[FastAPI Backend]
+    E -->|Extract paper context from supported sites| B
+
+    B --> P[PDF text extraction]
+    B --> G[Gemini embeddings and generation]
+    B --> M[(MongoDB Atlas)]
+    B --> T[ElevenLabs audio]
+    B --> S[Solana payment verification]
+
+    M --> B
+    G --> B
+    T --> B
+    S --> B
+
+    B -->|Answers, citations, telemetry, sessions| F
+    B -->|Context graph and use cases| E
+```
+
+### End-to-End Flow
+
+1. A user uploads a paper in the frontend or opens a supported research page in the extension.
+2. The backend extracts or receives paper text.
+3. The backend chunks content, creates embeddings, and stores data in MongoDB Atlas.
+4. The user asks questions or requests graph analysis.
+5. The backend retrieves relevant context, generates a response, and optionally synthesizes audio.
+6. The frontend or extension renders the result as chat, citations, telemetry, or a concept graph.
+
+For a more detailed version of the same workflow, see [WORKFLOW.md](./WORKFLOW.md) and [ARCHITECTURE.md](./ARCHITECTURE.md).
+
 ## Repository Structure
 
 ```text
@@ -26,6 +64,12 @@ HackCU_12--main/
 - Optional Solana payment gating before query execution
 - Voice input plus ElevenLabs or browser TTS playback
 - Chrome extension support for ResearchGate, arXiv, Semantic Scholar, OpenReview, NCBI, IEEE Xplore, ACM DL, and Springer
+
+## Surface-by-Surface Breakdown
+
+- `savant-backend` handles ingestion, vector retrieval, graph extraction, session persistence, and third-party service calls.
+- `savant-frontend` is the main user-facing research cockpit for uploads, chat, citations, voice, and graph exploration.
+- `savant-extension` is a side-panel experience for supported academic websites that builds concept trees from live paper pages.
 
 ## Tech Stack
 
