@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+motor
+PyPDF2
+python-dotenv
+python-multipart
+google-generativeai
+elevenlabs
+sentence-transformers
+httpx
