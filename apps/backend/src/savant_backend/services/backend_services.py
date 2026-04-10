@@ -11,7 +11,7 @@ from PyPDF2 import PdfReader
 from savant_backend import config, store
 from savant_backend.models import VALID_GRAPH_CATEGORIES
 from savant_backend.core_logic import (
-    chunk_text,
+    chunk_text as _chunk_text,
     enforce_dag_edges,
     extract_retry_delay_seconds,
     fallback_chunks_for_prompt,
@@ -361,6 +361,10 @@ def build_citations(results: list[dict]) -> list[dict]:
         }
         for doc in results
     ]
+
+
+def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> list[str]:
+    return _chunk_text(text, chunk_size=chunk_size, overlap=overlap)
 
 
 def lexical_results_for_prompt(prompt: str, docs: list[dict], limit: int = 10) -> list[dict]:
