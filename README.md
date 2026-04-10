@@ -42,7 +42,7 @@ flowchart TD
 5. The backend retrieves relevant context, generates a response, and optionally synthesizes audio.
 6. The frontend or extension renders the result as chat, citations, telemetry, or a concept graph.
 
-For a more detailed version of the same workflow, see [WORKFLOW.md](./WORKFLOW.md) and [ARCHITECTURE.md](./ARCHITECTURE.md).
+For a more detailed version of the same workflow, see [WORKFLOW.md](./WORKFLOW.md), [DETAILED_WORKFLOW.md](./DETAILED_WORKFLOW.md), and [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Repository Structure
 
