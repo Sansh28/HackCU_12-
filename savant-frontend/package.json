@@ -1,0 +1,11 @@
+{
+  "name": "savant-frontend-compat",
+  "private": true,
+  "scripts": {
+    "postinstall": "npm --prefix ../apps/frontend ci",
+    "build": "npm --prefix ../apps/frontend run build",
+    "dev": "npm --prefix ../apps/frontend run dev",
+    "lint": "npm --prefix ../apps/frontend run lint",
+    "start": "npm --prefix ../apps/frontend run start"
+  }
+}

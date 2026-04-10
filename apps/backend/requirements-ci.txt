@@ -6,7 +6,6 @@ motor
 PyPDF2
 python-dotenv
 python-multipart
-google-generativeai
-elevenlabs
-sentence-transformers
 httpx
+pytest
+ruff
