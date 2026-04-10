@@ -1,0 +1,9 @@
+{
+  "name": "hackcu-12-monorepo",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix apps/frontend run build",
+    "dev": "npm --prefix apps/frontend run dev",
+    "lint": "npm --prefix apps/frontend run lint"
+  }
+}

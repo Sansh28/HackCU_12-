@@ -48,6 +48,10 @@ Short workflow docs:
 - `apps/frontend`: Next.js web app
 - `apps/extension`: Vite/React Chrome extension
 
+Vercel deployments should build from the repository root. The root `vercel.json`
+and `package.json` forward install/build commands to `apps/frontend` so the web
+app still deploys correctly after the monorepo move.
+
 ## Tech Stack
 
 - Backend: Python, FastAPI, Motor, PyPDF2, httpx, Gemini, ElevenLabs
