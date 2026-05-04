@@ -105,6 +105,9 @@ class FakeCollection:
     def _project(doc, projection):
         if not projection:
             return dict(doc)
+        # Support Mongo-style exclusion projection like {"_id": 0}
+        if set(projection.keys()) == {"_id"} and projection.get("_id") == 0:
+            return {key: value for key, value in doc.items() if key != "_id"}
         projected = {}
         for key, enabled in projection.items():
             if key == "_id":

@@ -130,7 +130,7 @@ async def _run_ingestion_job(job_id: str, owner_id: str, doc_id: str, filename: 
                 },
             )
             await _update_job(owner_id, job_id, status="completed", result=result, error=None)
-            services.log_event(logging.INFO, "document_ingestion_completed", owner_id=owner_id, doc_id=doc_id, **result)
+            services.log_event(logging.INFO, "document_ingestion_completed", owner_id=owner_id, **result)
             return
         except HTTPException as exc:
             if attempts <= 2 and exc.status_code >= 500:
