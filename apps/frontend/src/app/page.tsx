@@ -25,14 +25,97 @@ type GraphStateByConversation = Record<
     status: "idle" | "loading" | "ready" | "error";
     error: string | null;
     prefetched: { graphData: GraphPayload; paperText: string } | null;
+    workspace: {
+      sessionId: string;
+      bookmarks: string[];
+      savedInsights: string[];
+      nodeNotes: Record<string, string>;
+      selectedNodeId: string | null;
+    } | null;
   }
 >;
+
+type JobPayload = {
+  status?: "queued" | "processing" | "completed" | "failed";
+  result?: {
+    graph_data?: GraphPayload;
+    paper_text?: string;
+  };
+  error?: string | null;
+};
+
+async function pollGraphJob(jobId: string, attempts = 40): Promise<{ graphData: GraphPayload; paperText: string }> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const response = await savantFetch(`/jobs/${jobId}`);
+    const payload = (await response.json()) as JobPayload & { detail?: string };
+    if (!response.ok) {
+      throw new Error(payload.detail || "Failed to load graph job status");
+    }
+    if (payload.status === "completed" && payload.result?.graph_data && payload.result?.paper_text) {
+      return {
+        graphData: payload.result.graph_data,
+        paperText: payload.result.paper_text,
+      };
+    }
+    if (payload.status === "failed") {
+      throw new Error(payload.error || "Graph generation failed");
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 1200));
+  }
+  throw new Error("Graph generation timed out");
+}
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>("assistant");
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [graphByConversation, setGraphByConversation] = useState<GraphStateByConversation>({});
   const inFlightGraphKeyRef = useRef<string | null>(null);
+
+  const ensureGraphWorkspace = useCallback(async (docId: string) => {
+    const existingRes = await savantFetch(`/graph/workspaces/by-document/${docId}`);
+    if (existingRes.ok) {
+      const existingPayload = (await existingRes.json()) as {
+        workspace: {
+          session_id: string;
+          bookmarks?: string[];
+          saved_insights?: string[];
+          node_notes?: Record<string, string>;
+          selected_node_id?: string | null;
+        };
+      };
+      return {
+        sessionId: existingPayload.workspace.session_id,
+        bookmarks: existingPayload.workspace.bookmarks ?? [],
+        savedInsights: existingPayload.workspace.saved_insights ?? [],
+        nodeNotes: existingPayload.workspace.node_notes ?? {},
+        selectedNodeId: existingPayload.workspace.selected_node_id ?? null,
+      };
+    }
+
+    const createRes = await savantFetch("/graph/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ doc_id: docId, title: "Paper Graph Workspace" }),
+    });
+    const createPayload = (await createRes.json()) as {
+      session_id?: string;
+      bookmarks?: string[];
+      saved_insights?: string[];
+      node_notes?: Record<string, string>;
+      selected_node_id?: string | null;
+      detail?: string;
+    };
+    if (!createRes.ok || !createPayload.session_id) {
+      throw new Error(createPayload.detail || "Failed to create graph workspace");
+    }
+    return {
+      sessionId: createPayload.session_id,
+      bookmarks: createPayload.bookmarks ?? [],
+      savedInsights: createPayload.saved_insights ?? [],
+      nodeNotes: createPayload.node_notes ?? {},
+      selectedNodeId: createPayload.selected_node_id ?? null,
+    };
+  }, []);
 
   const buildGraphInBackground = useCallback(async (conversationId: string, docId: string) => {
     const graphKey = `${conversationId}:${docId}`;
@@ -47,29 +130,43 @@ export default function Home() {
           status: "loading",
           error: null,
           prefetched: null,
+          workspace: prev[conversationId]?.workspace ?? null,
         },
       }));
 
-      const contextRes = await savantFetch(`/documents/${docId}/context`);
-      const contextData = await contextRes.json();
-      if (!contextRes.ok) {
-        throw new Error(contextData.detail || "Failed to load uploaded document context");
-      }
-
-      const paperText = String(contextData.paper_text || "");
-      if (!paperText.trim()) {
-        throw new Error("Uploaded document has no extractable text for graph generation");
-      }
-
-      const graphRes = await savantFetch("/graph/extract", {
+      const queueRes = await savantFetch(`/documents/${docId}/graph`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paper_text: paperText }),
       });
-      const graphPayload = await graphRes.json();
-      if (!graphRes.ok) {
-        throw new Error(graphPayload.detail || "Failed to generate graph");
+      const queuePayload = (await queueRes.json()) as {
+        status?: string;
+        job_id?: string | null;
+        detail?: string;
+      };
+      if (!queueRes.ok) {
+        throw new Error(queuePayload.detail || "Failed to queue graph generation");
       }
+
+      let prefetched: { graphData: GraphPayload; paperText: string };
+      if (queuePayload.status === "completed") {
+        const cachedRes = await savantFetch(`/documents/${docId}/graph`);
+        const cachedPayload = (await cachedRes.json()) as {
+          graph_cache?: { graph_data?: GraphPayload; paper_text?: string };
+          detail?: string;
+        };
+        if (!cachedRes.ok || !cachedPayload.graph_cache?.graph_data || !cachedPayload.graph_cache?.paper_text) {
+          throw new Error(cachedPayload.detail || "Failed to load cached graph data");
+        }
+        prefetched = {
+          graphData: cachedPayload.graph_cache.graph_data,
+          paperText: cachedPayload.graph_cache.paper_text,
+        };
+      } else if (queuePayload.job_id) {
+        prefetched = await pollGraphJob(queuePayload.job_id);
+      } else {
+        throw new Error("Graph job did not return a job id");
+      }
+
+      const workspace = await ensureGraphWorkspace(docId);
 
       setGraphByConversation((prev) => ({
         ...prev,
@@ -77,7 +174,8 @@ export default function Home() {
           docId,
           status: "ready",
           error: null,
-          prefetched: { graphData: graphPayload, paperText },
+          prefetched,
+          workspace,
         },
       }));
     } catch (err) {
@@ -89,6 +187,7 @@ export default function Home() {
           status: "error",
           error: err instanceof Error ? err.message : "Background graph generation failed",
           prefetched: null,
+          workspace: prev[conversationId]?.workspace ?? null,
         },
       }));
     } finally {
@@ -96,7 +195,7 @@ export default function Home() {
         inFlightGraphKeyRef.current = null;
       }
     }
-  }, []);
+  }, [ensureGraphWorkspace]);
 
   const handleConversationChange = useCallback(
     ({ conversationId, docId }: { conversationId: string; docId: string | null }) => {
@@ -120,6 +219,7 @@ export default function Home() {
               status: "idle",
               error: null,
               prefetched: null,
+              workspace: null,
             },
           };
         });
@@ -138,6 +238,7 @@ export default function Home() {
             status: "idle",
             error: null,
             prefetched: null,
+            workspace: existing?.workspace ?? null,
           },
         };
       });
@@ -233,6 +334,7 @@ export default function Home() {
               prefetchedGraph={activeGraphState?.prefetched ?? null}
               backgroundStatus={activeGraphState?.status ?? "idle"}
               backgroundError={activeGraphState?.error ?? null}
+              workspace={activeGraphState?.workspace ?? null}
             />
           </div>
         </div>

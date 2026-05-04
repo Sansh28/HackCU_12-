@@ -1,15 +1,16 @@
 import { API_BASE_URL } from "@/lib/config";
-import { getClientOwnerToken } from "@/lib/owner";
+import { getClientAuthSession } from "@/lib/owner";
 
-export function withOwnerHeaders(headers?: HeadersInit): Headers {
+export async function withOwnerHeaders(headers?: HeadersInit): Promise<Headers> {
   const nextHeaders = new Headers(headers);
-  nextHeaders.set("X-Savant-Owner", getClientOwnerToken());
+  const session = await getClientAuthSession();
+  nextHeaders.set("Authorization", `Bearer ${session.accessToken}`);
   return nextHeaders;
 }
 
-export function savantFetch(path: string, init: RequestInit = {}): Promise<Response> {
+export async function savantFetch(path: string, init: RequestInit = {}): Promise<Response> {
   return fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: withOwnerHeaders(init.headers),
+    headers: await withOwnerHeaders(init.headers),
   });
 }

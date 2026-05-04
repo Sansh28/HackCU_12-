@@ -63,6 +63,7 @@ export default function App() {
           <div className="chip">{stats.concepts} concepts</div>
           <div className="chip">{stats.links} links</div>
           <div className="chip">{stats.categories} categories</div>
+          {payload ? <div className="chip">{payload.extraction.confidence} confidence</div> : null}
         </section>
       )}
 
@@ -76,6 +77,22 @@ export default function App() {
                 Open source page
               </a>
             </div>
+            <section className="use-cases">
+              <div className="use-cases-title">Extraction Strategy</div>
+              <div className="use-cases-subtitle">
+                Site adapter: {payload.extraction.site} · strategy: {payload.extraction.strategy} · confidence: {payload.extraction.confidence}
+              </div>
+              <div className="use-cases-list">
+                <article className="use-case-item">
+                  <h3>{payload.extraction.usedFallbackGraph ? "Fallback graph used" : "Backend graph used"}</h3>
+                  <p>
+                    {payload.extraction.usedFallbackGraph
+                      ? "The extension fell back to a local concept graph because backend graph extraction did not succeed."
+                      : "The extracted context was sent through the backend graph pipeline successfully."}
+                  </p>
+                </article>
+              </div>
+            </section>
             <CitationTreeGraph nodes={payload.nodes} edges={payload.edges} paperText={payload.paperText} />
             {payload.useCases.length > 0 && (
               <section className="use-cases">

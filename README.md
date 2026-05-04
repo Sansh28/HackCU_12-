@@ -41,6 +41,15 @@ Short workflow docs:
 - [docs/WORKFLOW.md](./docs/WORKFLOW.md)
 - [docs/DETAILED_WORKFLOW.md](./docs/DETAILED_WORKFLOW.md)
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+- [docs/ROADMAP.md](./docs/ROADMAP.md)
+
+## Canonical Paths
+
+- Backend source of truth: `apps/backend`
+- Frontend source of truth: `apps/frontend`
+- Extension source of truth: `apps/extension`
+- Canonical Vercel deployment root: `apps/frontend`
+- Product roadmap and delivery status: `docs/ROADMAP.md`
 
 ## App Breakdown
 
@@ -48,9 +57,20 @@ Short workflow docs:
 - `apps/frontend`: Next.js web app
 - `apps/extension`: Vite/React Chrome extension
 
-Vercel deployments should build from the repository root. The root `vercel.json`
-and `package.json` forward install/build commands to `apps/frontend` so the web
-app still deploys correctly after the monorepo move.
+## Frontend Deployment
+
+The canonical Vercel project root is `apps/frontend`.
+
+Use this exact setup in Vercel:
+
+- Framework Preset: `Next.js`
+- Root Directory: `apps/frontend`
+- Install Command: `npm ci`
+- Build Command: `npm run build`
+
+This repository no longer uses root-level Vercel compatibility wrappers or the
+legacy `savant-frontend` deployment path. If preview deployments fail, first
+verify the Vercel project is pointed at `apps/frontend`.
 
 ## Tech Stack
 
@@ -102,6 +122,14 @@ Then open `chrome://extensions`, enable Developer Mode, choose `Load unpacked`, 
 - Backend tests: `cd apps/backend && python -m unittest discover -s tests -p "test*.py"`
 - Frontend lint/typecheck: `cd apps/frontend && npm run lint && npm exec tsc -- --noEmit`
 - Extension checks: `cd apps/extension && npm run typecheck && npm run build`
+- Backend smoke flow: `cd apps/backend && pytest tests/test_api_flows.py -k smoke`
+
+## What Lands In CI
+
+- backend lint + test + smoke flow
+- frontend test + lint + typecheck + build
+- extension test + typecheck + build
+- deployment assumption checks for the canonical frontend path
 
 ## Contributor Docs
 

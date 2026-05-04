@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 
-import type { DocMeta, TimelineItem } from "@/components/terminal/types";
+import type { DocMeta, TimelineItem, WorkflowStage } from "@/components/terminal/types";
 
 type TimelinePanelProps = {
   docMeta: DocMeta | null;
@@ -9,6 +9,7 @@ type TimelinePanelProps = {
   pipelineStatus: string;
   timelineItems: TimelineItem[];
   uploadedFileName: string | null;
+  workflowStages: WorkflowStage[];
   onLogScroll: () => void;
   onLogSliderChange: (value: number) => void;
 };
@@ -20,9 +21,18 @@ export function TimelinePanel({
   pipelineStatus,
   timelineItems,
   uploadedFileName,
+  workflowStages,
   onLogScroll,
   onLogSliderChange,
 }: TimelinePanelProps) {
+  const statusStyles: Record<WorkflowStage["status"], string> = {
+    idle: "border-[#5d4930] bg-[#120d08] text-[#b99953]",
+    active: "border-amber-500/50 bg-amber-400/10 text-amber-200",
+    done: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
+    error: "border-red-500/40 bg-red-500/10 text-red-200",
+    degraded: "border-orange-500/40 bg-orange-500/10 text-orange-200",
+  };
+
   return (
     <div className="flex gap-2 min-h-0">
       <div
@@ -40,6 +50,39 @@ export function TimelinePanel({
             {docMeta?.pageCount ? <span className="px-2 py-1 rounded-md bg-[#12233a] border border-[#6a4f18]">{docMeta.pageCount} pages</span> : null}
             {docMeta?.chunksProcessed ? <span className="px-2 py-1 rounded-md bg-[#12233a] border border-[#6a4f18]">{docMeta.chunksProcessed} chunks</span> : null}
             {docMeta?.ingestMs ? <span className="px-2 py-1 rounded-md bg-[#12233a] border border-[#6a4f18]">{docMeta.ingestMs} ms ingest</span> : null}
+          </div>
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+            {workflowStages.map((stage) => (
+              <div key={stage.id} className={`rounded-lg border px-3 py-2 ${statusStyles[stage.status]}`}>
+                <div className="text-[10px] font-mono uppercase tracking-[0.16em]">{stage.label}</div>
+                <div className="mt-1 text-sm font-semibold capitalize">{stage.status}</div>
+                <div className="mt-1 text-[11px] leading-relaxed opacity-90">{stage.detail}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px]">
+            <div className="rounded-lg border border-[#3b2b15] bg-[#0f0b06] px-3 py-2 text-[#e7d29d]">
+              <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#c8a55b]">What Happened</div>
+              <div className="mt-1 leading-relaxed">
+                {pipelineStatus === "Degraded"
+                  ? "The system completed the request, but one of the retrieval or synthesis fallbacks was used."
+                  : pipelineStatus === "Attention Needed"
+                    ? "At least one stage failed and needs another attempt or a backend check."
+                    : "The pipeline is moving through upload, retrieval, synthesis, and audio as expected."}
+              </div>
+            </div>
+            <div className="rounded-lg border border-[#3b2b15] bg-[#0f0b06] px-3 py-2 text-[#e7d29d]">
+              <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#c8a55b]">How To Read Evidence</div>
+              <div className="mt-1 leading-relaxed">
+                Evidence cards explain why each chunk was selected, which page it came from, and which query terms it matched.
+              </div>
+            </div>
+            <div className="rounded-lg border border-[#3b2b15] bg-[#0f0b06] px-3 py-2 text-[#e7d29d]">
+              <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#c8a55b]">Graph Readiness</div>
+              <div className="mt-1 leading-relaxed">
+                Once a paper is ready, its graph workspace can be revisited without re-running the full generation path each time.
+              </div>
+            </div>
           </div>
         </div>
         {timelineItems.map((item) => (

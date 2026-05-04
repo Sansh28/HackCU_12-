@@ -4,6 +4,8 @@ export type Citation = {
   chunk_index?: number;
   score?: number;
   snippet?: string;
+  selection_reason?: string;
+  match_terms?: string[];
 };
 
 export type QueryTelemetry = {
@@ -13,6 +15,8 @@ export type QueryTelemetry = {
   tts_ms?: number;
   payment_verify_ms?: number;
   total_ms?: number;
+  retrieval_mode?: "hybrid" | "lexical_only";
+  llm_fallback?: boolean;
 };
 
 export type DocMeta = {
@@ -42,4 +46,13 @@ export type TimelineItem = {
   id: string;
   raw: string;
   tone: "info" | "success" | "warn" | "error";
+};
+
+export type StageStatus = "idle" | "active" | "done" | "error" | "degraded";
+
+export type WorkflowStage = {
+  id: "upload" | "retrieval" | "synthesis" | "audio";
+  label: string;
+  status: StageStatus;
+  detail: string;
 };

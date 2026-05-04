@@ -17,10 +17,12 @@ async def create_session(request: models.CreateSessionRequest, owner_id: str = D
 
     doc_filename = None
     if request.doc_id:
-        first_chunk = await store.documents_collection.find_one(security.owner_filter(owner_id, doc_id=request.doc_id), {"filename": 1})
-        if not first_chunk:
+        document = await store.documents_collection.find_one(security.owner_filter(owner_id, doc_id=request.doc_id), {"filename": 1, "status": 1})
+        if not document:
             raise HTTPException(status_code=404, detail="Document not found")
-        doc_filename = first_chunk.get("filename")
+        if document.get("status") != "ready":
+            raise HTTPException(status_code=409, detail="Document is still processing")
+        doc_filename = document.get("filename")
 
     session_doc = {
         "session_id": session_id,
@@ -94,9 +96,11 @@ async def upsert_chat_conversation_state(
         raise HTTPException(status_code=400, detail="title is required")
 
     if request.doc_id:
-        doc = await store.documents_collection.find_one(security.owner_filter(owner_id, doc_id=request.doc_id), {"_id": 1})
+        doc = await store.documents_collection.find_one(security.owner_filter(owner_id, doc_id=request.doc_id), {"_id": 1, "status": 1})
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
+        if doc.get("status") != "ready":
+            raise HTTPException(status_code=409, detail="Document is still processing")
 
     now = services.now_utc()
     update_doc = {

@@ -19,6 +19,36 @@ export type PaperUseCase = {
   description: string;
 };
 
+export type ExtractionStrategy =
+  | "adapter:arxiv"
+  | "adapter:openreview"
+  | "adapter:semantic-scholar"
+  | "adapter:acm"
+  | "adapter:ieee"
+  | "adapter:springer"
+  | "adapter:researchgate"
+  | "adapter:ncbi"
+  | "generic-dom"
+  | "arxiv-abs-fallback"
+  | "local-fallback-graph";
+
+export type ExtractionMeta = {
+  site:
+    | "arxiv"
+    | "openreview"
+    | "semantic-scholar"
+    | "acm"
+    | "ieee"
+    | "springer"
+    | "researchgate"
+    | "ncbi"
+    | "generic";
+  strategy: ExtractionStrategy;
+  confidence: "high" | "medium" | "low";
+  usedFallbackGraph: boolean;
+  usedBackendGraph: boolean;
+};
+
 export type ContextTreePayload = {
   sourceUrl: string;
   title: string;
@@ -26,6 +56,7 @@ export type ContextTreePayload = {
   nodes: ContextNode[];
   edges: ContextEdge[];
   useCases: PaperUseCase[];
+  extraction: ExtractionMeta;
 };
 
 export type ExtensionMessage =
