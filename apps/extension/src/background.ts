@@ -1,5 +1,6 @@
 import type {
   ContextEdge,
+  ExtractionMeta,
   ContextNode,
   ContextTreePayload,
   ExtensionMessage,
@@ -14,7 +15,9 @@ const SUPPORTED_HOST_RE =
 const GRAPH_EXTRACT_URL = `${API_BASE_URL}/graph/extract`;
 const GRAPH_USE_CASES_URL = `${API_BASE_URL}/graph/use-cases`;
 
-function isSupportedUrl(url?: string): boolean {
+type SupportedSite = ExtractionMeta["site"];
+
+export function isSupportedUrl(url?: string): boolean {
   if (!url) return false;
   try {
     const host = new URL(url).hostname;
@@ -22,6 +25,23 @@ function isSupportedUrl(url?: string): boolean {
   } catch {
     return false;
   }
+}
+
+function detectSupportedSite(url: string): SupportedSite {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (host.includes("arxiv.org")) return "arxiv";
+    if (host.includes("openreview.net")) return "openreview";
+    if (host.includes("semanticscholar.org")) return "semantic-scholar";
+    if (host.includes("dl.acm.org")) return "acm";
+    if (host.includes("ieeexplore.ieee.org")) return "ieee";
+    if (host.includes("springer.com")) return "springer";
+    if (host.includes("researchgate.net")) return "researchgate";
+    if (host.includes("ncbi.nlm.nih.gov")) return "ncbi";
+  } catch {
+    return "generic";
+  }
+  return "generic";
 }
 
 function normalizeText(text: string): string {
@@ -90,7 +110,7 @@ function topSentences(text: string, max = 8): string[] {
     .slice(0, max);
 }
 
-function fallbackContextGraph(title: string, paperText: string, sourceUrl: string): ContextTreePayload {
+export function fallbackContextGraph(title: string, paperText: string, sourceUrl: string, extraction?: Partial<ExtractionMeta>): ContextTreePayload {
   const s = topSentences(paperText, 8);
   const sentence = (idx: number, fallback: string): string => s[idx] || fallback;
   const useCases: PaperUseCase[] = [
@@ -188,6 +208,13 @@ function fallbackContextGraph(title: string, paperText: string, sourceUrl: strin
     nodes,
     edges,
     useCases,
+    extraction: {
+      site: extraction?.site || detectSupportedSite(sourceUrl),
+      strategy: extraction?.strategy || "local-fallback-graph",
+      confidence: extraction?.confidence || "low",
+      usedFallbackGraph: true,
+      usedBackendGraph: false,
+    },
   };
 }
 
@@ -219,7 +246,13 @@ function validateUseCasesPayload(raw: unknown): PaperUseCase[] {
   return cleaned;
 }
 
-function validateContextPayload(raw: unknown, sourceUrl: string, paperText: string, useCases: PaperUseCase[]): ContextTreePayload {
+function validateContextPayload(
+  raw: unknown,
+  sourceUrl: string,
+  paperText: string,
+  useCases: PaperUseCase[],
+  extraction: ExtractionMeta
+): ContextTreePayload {
   if (!raw || typeof raw !== "object") {
     throw new Error("Invalid context graph payload.");
   }
@@ -269,13 +302,24 @@ function validateContextPayload(raw: unknown, sourceUrl: string, paperText: stri
     nodes,
     edges,
     useCases,
+    extraction: {
+      ...extraction,
+      usedFallbackGraph: false,
+      usedBackendGraph: true,
+    },
   };
 }
 
-async function extractPageText(tabId: number): Promise<{ title: string; paperText: string }> {
-  const [result] = await chrome.scripting.executeScript({
+async function extractPageText(
+  chromeApi: typeof chrome,
+  tabId: number,
+  sourceUrl: string
+): Promise<{ title: string; paperText: string; extraction: ExtractionMeta }> {
+  const site = detectSupportedSite(sourceUrl);
+  const [result] = await chromeApi.scripting.executeScript({
     target: { tabId },
-    func: () => {
+    args: [site],
+    func: (siteName: SupportedSite) => {
       const normalize = (text: string): string => text.replace(/\s+/g, " ").trim();
       const textFromMeta = (selectors: string[]): string => {
         for (const selector of selectors) {
@@ -288,8 +332,66 @@ async function extractPageText(tabId: number): Promise<{ title: string; paperTex
         return "";
       };
 
+      const adapterBySite: Record<string, { titleSelectors: string[]; contentSelectors: string[]; confidence: "high" | "medium" }> = {
+        arxiv: {
+          titleSelectors: ["h1.title", "main h1"],
+          contentSelectors: [".abstract", "blockquote.abstract", ".ltx_abstract", ".ltx_para"],
+          confidence: "high",
+        },
+        "openreview": {
+          titleSelectors: ["h2.citation_title", "h2", "main h2"],
+          contentSelectors: ["div.note-content-field", ".forum-content", ".note > .content"],
+          confidence: "high",
+        },
+        "semantic-scholar": {
+          titleSelectors: ["h1[data-testid='paper-detail-title']", "h1"],
+          contentSelectors: ["section[data-testid='paper-abstract']", "[data-testid='paper-abstract']", "main p"],
+          confidence: "high",
+        },
+        acm: {
+          titleSelectors: ["h1.citation__title", "h1"],
+          contentSelectors: [".abstractSection", ".article__body p", "section.abstract"],
+          confidence: "high",
+        },
+        ieee: {
+          titleSelectors: ["h1.document-title", "h1"],
+          contentSelectors: [".abstract-text", ".document-abstract", ".article-section__content p"],
+          confidence: "high",
+        },
+        springer: {
+          titleSelectors: ["h1.c-article-title", "h1"],
+          contentSelectors: [".c-article-section__content p", "section.Abstract p", ".Abstract p"],
+          confidence: "high",
+        },
+        researchgate: {
+          titleSelectors: ["h1", "[data-testid='publication-header-title']"],
+          contentSelectors: [".nova-legacy-e-text--spacing-auto", "[data-testid='publicationAbstract']", "main p"],
+          confidence: "medium",
+        },
+        ncbi: {
+          titleSelectors: ["h1.content-title", "h1"],
+          contentSelectors: [".abstract-content", ".tsec.sec p", ".pmc-article p"],
+          confidence: "medium",
+        },
+      };
+
+      const collectFromSelectors = (selectors: string[], limit = 24): string[] => {
+        const blocks: string[] = [];
+        const seen = new Set<string>();
+        for (const selector of selectors) {
+          const els = Array.from(document.querySelectorAll(selector));
+          for (let i = 0; i < els.length && blocks.length < limit; i++) {
+            const raw = normalize((els[i] as HTMLElement).innerText || "");
+            if (raw.length < 80 || seen.has(raw)) continue;
+            seen.add(raw);
+            blocks.push(raw);
+          }
+        }
+        return blocks;
+      };
+
       const title =
-        normalize((document.querySelector("h1") as HTMLElement | null)?.innerText || "") ||
+        normalize((document.querySelector(adapterBySite[siteName]?.titleSelectors?.[0] || "h1") as HTMLElement | null)?.innerText || "") ||
         textFromMeta([
           'meta[name="citation_title"]',
           'meta[property="og:title"]',
@@ -300,16 +402,6 @@ async function extractPageText(tabId: number): Promise<{ title: string; paperTex
         "Research Paper";
 
       const blocks: string[] = [];
-      const seen = new Set<string>();
-      const collect = (selector: string, limit = 24) => {
-        const els = Array.from(document.querySelectorAll(selector));
-        for (let i = 0; i < els.length && i < limit; i++) {
-          const raw = normalize((els[i] as HTMLElement).innerText || "");
-          if (raw.length < 80 || seen.has(raw)) continue;
-          seen.add(raw);
-          blocks.push(raw);
-        }
-      };
 
       const metaAbstract = textFromMeta([
         'meta[name="citation_abstract"]',
@@ -322,26 +414,44 @@ async function extractPageText(tabId: number): Promise<{ title: string; paperTex
         blocks.push(`Abstract: ${metaAbstract}`);
       }
 
-      collect("section.abstract, .abstract, #abstract, [class*='abstract']");
-      collect('[data-test-id*="abstract"], [data-testid*="abstract"], [class*="summary"], [class*="article__abstract"]');
-      collect('section[aria-label*="abstract" i], div[aria-label*="abstract" i]');
-      collect("main p, article p, .paper p, [id*='main'] p, .ltx_para");
-      collect(".article-section__content p, .c-article-section p, .abstract-group p, .u-mb-1 p");
-      collect("main li, article li");
+      const adapter = adapterBySite[siteName];
+      if (adapter) {
+        blocks.push(...collectFromSelectors(adapter.contentSelectors, 24));
+      }
+      blocks.push(...collectFromSelectors(["section.abstract, .abstract, #abstract, [class*='abstract']"], 12));
+      blocks.push(...collectFromSelectors(['[data-test-id*="abstract"], [data-testid*="abstract"], [class*="summary"], [class*="article__abstract"]'], 12));
+      blocks.push(...collectFromSelectors(['section[aria-label*="abstract" i], div[aria-label*="abstract" i]'], 12));
+      blocks.push(...collectFromSelectors(["main p, article p, .paper p, [id*='main'] p, .ltx_para"], 24));
+      blocks.push(...collectFromSelectors([".article-section__content p, .c-article-section p, .abstract-group p, .u-mb-1 p"], 20));
+      blocks.push(...collectFromSelectors(["main li, article li"], 18));
 
       let paperText = blocks.join("\n\n");
+      let strategy: ExtractionMeta["strategy"] = adapter ? (`adapter:${siteName === "semantic-scholar" ? "semantic-scholar" : siteName}` as ExtractionMeta["strategy"]) : "generic-dom";
+      let confidence: ExtractionMeta["confidence"] = adapter?.confidence || "medium";
       if (paperText.length < 600) {
         paperText = normalize((document.body as HTMLElement).innerText || "").slice(0, 32000);
+        strategy = "generic-dom";
+        confidence = "low";
       }
-      return { title, paperText: paperText.slice(0, 32000) };
+      return {
+        title,
+        paperText: paperText.slice(0, 32000),
+        extraction: {
+          site: siteName,
+          strategy,
+          confidence,
+          usedFallbackGraph: false,
+          usedBackendGraph: false,
+        },
+      };
     },
   });
 
-  return result.result as { title: string; paperText: string };
+  return result.result as { title: string; paperText: string; extraction: ExtractionMeta };
 }
 
-async function fetchContextGraphFromBackend(paperText: string): Promise<unknown> {
-  const res = await fetch(GRAPH_EXTRACT_URL, {
+async function fetchContextGraphFromBackend(fetchImpl: typeof fetch, paperText: string): Promise<unknown> {
+  const res = await fetchImpl(GRAPH_EXTRACT_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ paper_text: paperText }),
@@ -355,8 +465,8 @@ async function fetchContextGraphFromBackend(paperText: string): Promise<unknown>
   return raw;
 }
 
-async function fetchUseCasesFromBackend(paperText: string): Promise<PaperUseCase[]> {
-  const res = await fetch(GRAPH_USE_CASES_URL, {
+async function fetchUseCasesFromBackend(fetchImpl: typeof fetch, paperText: string): Promise<PaperUseCase[]> {
+  const res = await fetchImpl(GRAPH_USE_CASES_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ paper_text: paperText }),
@@ -367,8 +477,12 @@ async function fetchUseCasesFromBackend(paperText: string): Promise<PaperUseCase
   return validateUseCasesPayload(raw);
 }
 
-async function fetchContextTreeFromActiveTab(): Promise<ExtensionResponse> {
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+export async function fetchContextTreeFromActiveTab(
+  deps: { chromeApi?: typeof chrome; fetchImpl?: typeof fetch } = {}
+): Promise<ExtensionResponse> {
+  const chromeApi = deps.chromeApi ?? chrome;
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const tabs = await chromeApi.tabs.query({ active: true, currentWindow: true });
   const tab = tabs[0];
   if (!tab?.id || !tab.url) {
     return { ok: false, error: "No active tab available." };
@@ -381,11 +495,20 @@ async function fetchContextTreeFromActiveTab(): Promise<ExtensionResponse> {
     };
   }
 
-  let extracted = await extractPageText(tab.id);
+  let extracted = await extractPageText(chromeApi, tab.id, tab.url);
   if (!extracted.paperText || extracted.paperText.length < 300) {
     const arxivFallback = await extractArxivContextFromPdfUrl(tab.url);
     if (arxivFallback) {
-      extracted = arxivFallback;
+      extracted = {
+        ...arxivFallback,
+        extraction: {
+          site: detectSupportedSite(tab.url),
+          strategy: "arxiv-abs-fallback",
+          confidence: "medium",
+          usedFallbackGraph: false,
+          usedBackendGraph: false,
+        },
+      };
     } else {
       return { ok: false, error: "Could not extract enough paper context from this page." };
     }
@@ -393,66 +516,86 @@ async function fetchContextTreeFromActiveTab(): Promise<ExtensionResponse> {
 
   try {
     const [graphRaw, useCases] = await Promise.all([
-      fetchContextGraphFromBackend(extracted.paperText),
-      fetchUseCasesFromBackend(extracted.paperText),
+      fetchContextGraphFromBackend(fetchImpl, extracted.paperText),
+      fetchUseCasesFromBackend(fetchImpl, extracted.paperText),
     ]);
-    const validated = validateContextPayload(graphRaw, tab.url, extracted.paperText, useCases);
+    const validated = validateContextPayload(graphRaw, tab.url, extracted.paperText, useCases, extracted.extraction);
     return { ok: true, data: validated };
   } catch {
     return {
       ok: true,
-      data: fallbackContextGraph(extracted.title, extracted.paperText, tab.url),
+      data: fallbackContextGraph(extracted.title, extracted.paperText, tab.url, extracted.extraction),
     };
   }
 }
 
-chrome.runtime.onInstalled.addListener(async () => {
-  await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-});
-
-chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab.id) return;
-  await chrome.sidePanel.setOptions({
-    tabId: tab.id,
-    path: "sidepanel.html",
-    enabled: isSupportedUrl(tab.url),
+export function setupRuntimeListeners(chromeApi: typeof chrome): void {
+  chromeApi.runtime.onInstalled.addListener(async () => {
+    await chromeApi.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   });
-  await chrome.sidePanel.open({ tabId: tab.id });
-});
 
-chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
-  if (info.status !== "complete") return;
-  await chrome.sidePanel.setOptions({
-    tabId,
-    enabled: isSupportedUrl(tab.url),
-    path: "sidepanel.html",
+  chromeApi.action.onClicked.addListener(async (tab) => {
+    if (!tab.id) return;
+    await chromeApi.sidePanel.setOptions({
+      tabId: tab.id,
+      path: "sidepanel.html",
+      enabled: isSupportedUrl(tab.url),
+    });
+    await chromeApi.sidePanel.open({ tabId: tab.id });
   });
-});
 
-chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
-  if (message.type === "PING") {
-    sendResponse({
-      ok: true,
-      data: { sourceUrl: "", title: "pong", paperText: "", nodes: [], edges: [], useCases: [] },
-    } satisfies ExtensionResponse);
+  chromeApi.tabs.onUpdated.addListener(async (tabId, info, tab) => {
+    if (info.status !== "complete") return;
+    await chromeApi.sidePanel.setOptions({
+      tabId,
+      enabled: isSupportedUrl(tab.url),
+      path: "sidepanel.html",
+    });
+  });
+
+  chromeApi.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
+    if (message.type === "PING") {
+      sendResponse({
+        ok: true,
+        data: {
+          sourceUrl: "",
+          title: "pong",
+          paperText: "",
+          nodes: [],
+          edges: [],
+          useCases: [],
+          extraction: {
+            site: "generic",
+            strategy: "generic-dom",
+            confidence: "low",
+            usedFallbackGraph: false,
+            usedBackendGraph: false,
+          },
+        },
+      } satisfies ExtensionResponse);
+      return false;
+    }
+
+    if (message.type === "FETCH_CONTEXT_TREE") {
+      void (async () => {
+        try {
+          const response = await fetchContextTreeFromActiveTab({ chromeApi, fetchImpl: fetch });
+          sendResponse(response);
+        } catch (error) {
+          sendResponse({
+            ok: false,
+            error: error instanceof Error ? error.message : "Failed to fetch context tree.",
+          } satisfies ExtensionResponse);
+        }
+      })();
+      return true;
+    }
+
+    sendResponse({ ok: false, error: "Unknown message." } satisfies ExtensionResponse);
     return false;
-  }
+  });
+}
 
-  if (message.type === "FETCH_CONTEXT_TREE") {
-    void (async () => {
-      try {
-        const response = await fetchContextTreeFromActiveTab();
-        sendResponse(response);
-      } catch (error) {
-        sendResponse({
-          ok: false,
-          error: error instanceof Error ? error.message : "Failed to fetch context tree.",
-        } satisfies ExtensionResponse);
-      }
-    })();
-    return true;
-  }
-
-  sendResponse({ ok: false, error: "Unknown message." } satisfies ExtensionResponse);
-  return false;
-});
+if (typeof chrome !== "undefined" && chrome.runtime) {
+  setupRuntimeListeners(chrome);
+}

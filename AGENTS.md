@@ -63,12 +63,14 @@ npm run build
 ```bash
 cd apps/backend
 python -m unittest discover -s tests -p "test*.py"
+pytest tests/test_api_flows.py -k smoke
 ```
 
 ### Frontend
 
 ```bash
 cd apps/frontend
+npm run test
 npm run lint
 npm exec tsc -- --noEmit
 ```
@@ -77,6 +79,13 @@ npm exec tsc -- --noEmit
 
 ```bash
 cd apps/extension
+npm run test
 npm run typecheck
 npm run build
 ```
+
+## Delivery Notes
+
+- The canonical deployment target is `apps/frontend` on Vercel.
+- Graph workspaces are now persisted by `doc_id`, so regressions around graph revisit flows should be checked when touching backend graph or frontend page orchestration.
+- The fastest cross-app confidence check is the backend smoke flow plus frontend and extension test runs.

@@ -8,6 +8,19 @@ on:
   pull_request:
 
 jobs:
+  deployment_assumptions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify canonical frontend deployment path
+        run: |
+          test -f apps/frontend/package.json
+          test -f apps/frontend/package-lock.json
+          test -f apps/frontend/next.config.ts
+          test ! -f package.json
+          test ! -f vercel.json
+          test ! -f savant-frontend/package.json
+
   backend:
     runs-on: ubuntu-latest
     defaults:
@@ -26,6 +39,8 @@ jobs:
         run: ruff check src tests
       - name: Pytest
         run: pytest tests
+      - name: Backend smoke flow
+        run: pytest tests/test_api_flows.py -k smoke
 
   frontend:
     runs-on: ubuntu-latest
@@ -41,10 +56,12 @@ jobs:
           cache-dependency-path: apps/frontend/package-lock.json
       - name: Install frontend dependencies
         run: npm ci
+      - name: Test
+        run: npm run test
       - name: Lint
         run: npm run lint
       - name: TypeScript
-        run: npm exec tsc -- --noEmit
+        run: npm run typecheck
       - name: Build
         run: npm run build
 
@@ -62,6 +79,8 @@ jobs:
           cache-dependency-path: apps/extension/package-lock.json
       - name: Install extension dependencies
         run: npm ci
+      - name: Test
+        run: npm run test:ci
       - name: Typecheck
         run: npm run typecheck
       - name: Build

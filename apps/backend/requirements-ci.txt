@@ -1,11 +1,3 @@
-fastapi
-uvicorn[standard]
-pydantic
-pydantic-settings
-motor
-PyPDF2
-python-dotenv
-python-multipart
-httpx
+-r requirements.txt
 pytest
 ruff

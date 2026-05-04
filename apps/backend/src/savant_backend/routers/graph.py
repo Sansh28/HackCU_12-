@@ -1,4 +1,3 @@
-import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,36 +16,7 @@ async def graph_extract(request: models.GraphExtractRequest):
     if len(paper_text) < 200:
         raise HTTPException(status_code=400, detail="paper_text is too short for graph extraction")
 
-    system_instruction = "You are an expert research assistant. Return only valid JSON. Extract 8-16 key concepts from paper text and relations between them."
-    prompt = (
-        "Extract a concise concept graph from the following paper text.\n"
-        "Return ONLY JSON matching exactly this schema:\n"
-        "{\n"
-        '  "title": string,\n'
-        '  "nodes": [\n'
-        '    {"id": string, "label": string, "summary": string, "category": "foundation"|"method"|"result"|"component"|"concept", "importance": 1-5}\n'
-        "  ],\n"
-        '  "edges": [{"source": string, "target": string, "label": string}]\n'
-        "}\n"
-        "Rules:\n"
-        "- 8 to 16 nodes.\n"
-        "- Keep labels short and human readable.\n"
-        "- Use stable ids (snake_case).\n"
-        "- Edges should generally flow from foundational ideas toward outcomes.\n"
-        "- Do not add markdown fences.\n\n"
-        f"Paper text:\n{paper_text[:30000]}"
-    )
-
-    try:
-        raw = await services.call_gemini(prompt, system_instruction=system_instruction, require_json=True)
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        raw_retry = await services.call_gemini(prompt + "\n\nReturn pure JSON only.", system_instruction=system_instruction, require_json=True)
-        try:
-            parsed = json.loads(raw_retry)
-        except json.JSONDecodeError as exc:
-            raise HTTPException(status_code=502, detail="Gemini returned invalid JSON for graph extraction") from exc
-    return services.validate_graph_payload(parsed)
+    return await services.extract_graph_from_text(paper_text)
 
 
 @router.post("/graph/use-cases")
@@ -57,50 +27,57 @@ async def graph_use_cases(request: models.GraphUseCasesRequest):
     if len(paper_text) < 200:
         raise HTTPException(status_code=400, detail="paper_text is too short for use-case extraction")
 
-    system_instruction = "You are an expert research analyst. Return only valid JSON. Extract practical, real-world use cases grounded in the provided paper text."
-    prompt = (
-        "From the paper text below, extract the most concrete use cases.\n"
-        "Return ONLY JSON matching exactly this schema:\n"
-        "{\n"
-        '  "use_cases": [\n'
-        '    {"title": string, "description": string}\n'
-        "  ]\n"
-        "}\n"
-        "Rules:\n"
-        "- Return 4 to 6 use cases.\n"
-        "- Each title should be short and specific.\n"
-        "- Each description must clearly explain how the paper's method applies in practice.\n"
-        "- Do not add markdown fences.\n\n"
-        f"Paper text:\n{paper_text[:30000]}"
-    )
-
-    try:
-        raw = await services.call_gemini(prompt, system_instruction=system_instruction, require_json=True)
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        raw_retry = await services.call_gemini(prompt + "\n\nReturn pure JSON only.", system_instruction=system_instruction, require_json=True)
-        try:
-            parsed = json.loads(raw_retry)
-        except json.JSONDecodeError as exc:
-            raise HTTPException(status_code=502, detail="Gemini returned invalid JSON for use-case extraction") from exc
-    return {"use_cases": services.validate_use_cases_payload(parsed)}
+    return {"use_cases": await services.extract_use_cases_from_text(paper_text)}
 
 
 @router.post("/graph/sessions")
 async def graph_create_session(request: models.GraphSessionCreateRequest, owner_id: str = Depends(security.get_owner_id)):
     services.require_database()
+    if request.doc_id:
+        existing = await store.graph_sessions_collection.find_one(security.owner_filter(owner_id, doc_id=request.doc_id), {"_id": 0})
+        if existing:
+            return {
+                "session_id": existing["session_id"],
+                "title": existing.get("title", "Paper Graph Session"),
+                "doc_id": existing.get("doc_id"),
+                "bookmarks": existing.get("bookmarks", []),
+                "saved_insights": existing.get("saved_insights", []),
+                "node_notes": existing.get("node_notes", {}),
+                "selected_node_id": existing.get("selected_node_id"),
+            }
     session_id = str(uuid.uuid4())
     now = services.now_utc()
+    graph_cache = None
+    if request.doc_id:
+        document = await store.documents_collection.find_one(security.owner_filter(owner_id, doc_id=request.doc_id), {"graph_cache": 1, "filename": 1})
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        graph_cache = document.get("graph_cache")
     session_doc = {
         "session_id": session_id,
         "owner_id": owner_id,
+        "doc_id": request.doc_id,
         "title": (request.title or "Paper Graph Session")[:120],
         "paper_context": (request.paper_context or "")[:8000],
+        "graph_cache": graph_cache,
+        "bookmarks": [],
+        "saved_insights": [],
+        "node_notes": {},
+        "selected_node_id": None,
         "created_at": now,
         "updated_at": now,
     }
     await store.graph_sessions_collection.insert_one(session_doc)
-    return {"session_id": session_id, "title": session_doc["title"]}
+    return {"session_id": session_id, "title": session_doc["title"], "doc_id": request.doc_id, "bookmarks": [], "saved_insights": [], "node_notes": {}, "selected_node_id": None}
+
+
+@router.get("/graph/workspaces/by-document/{doc_id}")
+async def graph_get_workspace_by_document(doc_id: str, owner_id: str = Depends(security.get_owner_id)):
+    services.require_database()
+    workspace = await store.graph_sessions_collection.find_one(security.owner_filter(owner_id, doc_id=doc_id), {"_id": 0})
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Graph workspace not found")
+    return {"workspace": workspace}
 
 
 @router.get("/graph/sessions/{session_id}")
@@ -111,6 +88,30 @@ async def graph_get_session(session_id: str, owner_id: str = Depends(security.ge
         raise HTTPException(status_code=404, detail="Graph session not found")
     messages = await store.graph_messages_collection.find(security.owner_filter(owner_id, session_id=session_id), {"_id": 0}).sort("created_at", 1).to_list(length=2000)
     return {"session": session, "messages": messages}
+
+
+@router.patch("/graph/sessions/{session_id}")
+async def graph_update_session(
+    session_id: str,
+    request: models.GraphWorkspaceUpdateRequest,
+    owner_id: str = Depends(security.get_owner_id),
+):
+    services.require_database()
+    now = services.now_utc()
+    update_doc = {
+        "selected_node_id": request.selected_node_id,
+        "bookmarks": request.bookmarks[:40],
+        "saved_insights": [item.strip()[:320] for item in request.saved_insights if item.strip()][:50],
+        "node_notes": {key[:80]: value[:1200] for key, value in request.node_notes.items() if value.strip()},
+        "updated_at": now,
+    }
+    result = await store.graph_sessions_collection.update_one(
+        security.owner_filter(owner_id, session_id=session_id),
+        {"$set": update_doc},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Graph session not found")
+    return {"ok": True}
 
 
 @router.get("/graph/sessions/{session_id}/nodes/{node_id}/messages")

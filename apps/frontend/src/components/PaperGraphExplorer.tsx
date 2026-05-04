@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as d3 from "d3";
-import { API_BASE_URL } from "@/lib/config";
 import { savantFetch } from "@/lib/api";
 
 type GraphNode = {
@@ -34,6 +33,13 @@ type PaperGraphExplorerProps = {
   prefetchedGraph?: { graphData: GraphData; paperText: string } | null;
   backgroundStatus?: "idle" | "loading" | "ready" | "error";
   backgroundError?: string | null;
+  workspace?: {
+    sessionId: string;
+    bookmarks: string[];
+    savedInsights: string[];
+    nodeNotes: Record<string, string>;
+    selectedNodeId: string | null;
+  } | null;
 };
 
 const SAMPLE_PAPER = `Abstract: Attention mechanisms have become an integral part of compelling sequence modeling and transduction models in various tasks, allowing modeling of dependencies without regard to their distance in the input or output sequences. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train.
@@ -293,12 +299,20 @@ function ConceptCard({
   node,
   paperText,
   onClose,
-  apiBase,
+  note,
+  isBookmarked,
+  onNoteChange,
+  onToggleBookmark,
+  onSaveInsight,
 }: {
   node: GraphNode;
   paperText: string;
   onClose: () => void;
-  apiBase: string;
+  note: string;
+  isBookmarked: boolean;
+  onNoteChange: (value: string) => void;
+  onToggleBookmark: () => void;
+  onSaveInsight: (value: string) => void;
 }) {
   const [qaList, setQaList] = useState<QAItem[]>([]);
   const [question, setQuestion] = useState("");
@@ -429,6 +443,38 @@ function ConceptCard({
         >
           {node.label}
         </h2>
+        <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+          <button
+            onClick={onToggleBookmark}
+            style={{
+              border: `1px solid ${colors.node}40`,
+              background: isBookmarked ? colors.bg : "transparent",
+              color: isBookmarked ? colors.text : "rgba(203,213,225,0.8)",
+              borderRadius: "999px",
+              padding: "6px 10px",
+              fontSize: "11px",
+              fontFamily: "'DM Mono', monospace",
+              cursor: "pointer",
+            }}
+          >
+            {isBookmarked ? "Bookmarked" : "Bookmark"}
+          </button>
+          <button
+            onClick={() => onSaveInsight(`${node.label}: ${node.summary}`)}
+            style={{
+              border: `1px solid ${colors.node}40`,
+              background: "transparent",
+              color: "rgba(203,213,225,0.8)",
+              borderRadius: "999px",
+              padding: "6px 10px",
+              fontSize: "11px",
+              fontFamily: "'DM Mono', monospace",
+              cursor: "pointer",
+            }}
+          >
+            Save Insight
+          </button>
+        </div>
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
@@ -464,6 +510,47 @@ function ConceptCard({
           >
             {node.summary}
           </p>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(99,102,241,0.05)",
+            border: "1px solid rgba(129,140,248,0.16)",
+            borderRadius: "12px",
+            padding: "16px",
+            marginBottom: "20px",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "10px",
+              color: "rgba(165,180,252,0.72)",
+              fontFamily: "'DM Mono', monospace",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              marginBottom: "8px",
+            }}
+          >
+            NODE NOTES
+          </div>
+          <textarea
+            value={note}
+            onChange={(event) => onNoteChange(event.target.value)}
+            placeholder={`Capture your takeaways about ${node.label}...`}
+            style={{
+              width: "100%",
+              minHeight: "88px",
+              resize: "vertical",
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: "10px",
+              padding: "12px",
+              color: "#e2e8f0",
+              fontSize: "13px",
+              fontFamily: "'DM Sans', sans-serif",
+              lineHeight: 1.6,
+            }}
+          />
         </div>
 
         {qaList.map((qa, i) => (
@@ -779,14 +866,37 @@ export function PaperGraphExplorer({
   prefetchedGraph = null,
   backgroundStatus = "idle",
   backgroundError = null,
+  workspace = null,
 }: PaperGraphExplorerProps) {
   const [stage, setStage] = useState<"input" | "loading" | "graph">("input");
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [paperText, setPaperText] = useState("");
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [workspaceState, setWorkspaceState] = useState<PaperGraphExplorerProps["workspace"]>(workspace);
   const lastPrefetchKeyRef = useRef<string>("");
   const lastAutoDocIdRef = useRef<string | null>(null);
+  const lastWorkspaceSnapshotRef = useRef<string>("");
+  const pollGraphJob = useCallback(async (jobId: string): Promise<{ graphData: GraphData; paperText: string }> => {
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const res = await savantFetch(`/jobs/${jobId}`);
+      const data = (await res.json()) as {
+        status?: string;
+        result?: { graph_data?: GraphData; paper_text?: string };
+        error?: string;
+        detail?: string;
+      };
+      if (!res.ok) throw new Error(data.detail || "Failed to load graph job status");
+      if (data.status === "completed" && data.result?.graph_data && data.result?.paper_text) {
+        return { graphData: data.result.graph_data, paperText: data.result.paper_text };
+      }
+      if (data.status === "failed") {
+        throw new Error(data.error || "Graph generation failed");
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+    }
+    throw new Error("Graph generation timed out");
+  }, []);
 
   const handleAnalyze = useCallback(
     async (text: string) => {
@@ -821,12 +931,38 @@ export function PaperGraphExplorer({
     const run = async () => {
       try {
         setStage("loading");
-        const contextRes = await savantFetch(`/documents/${autoDocId}/context`);
-        const contextData = await contextRes.json();
-        if (!contextRes.ok) throw new Error(contextData.detail || "Failed to fetch uploaded document context");
+        const queueRes = await savantFetch(`/documents/${autoDocId}/graph`, { method: "POST" });
+        const queueData = (await queueRes.json()) as {
+          status?: string;
+          job_id?: string | null;
+          detail?: string;
+        };
+        if (!queueRes.ok) throw new Error(queueData.detail || "Failed to queue graph generation");
         if (cancelled) return;
-        const text = String(contextData.paper_text || "");
-        await handleAnalyze(text);
+
+        let payload: { graphData: GraphData; paperText: string } | null = null;
+        if (queueData.status === "completed") {
+          const cacheRes = await savantFetch(`/documents/${autoDocId}/graph`);
+          const cacheData = (await cacheRes.json()) as {
+            graph_cache?: { graph_data?: GraphData; paper_text?: string };
+            detail?: string;
+          };
+          if (!cacheRes.ok || !cacheData.graph_cache?.graph_data || !cacheData.graph_cache?.paper_text) {
+            throw new Error(cacheData.detail || "Failed to load cached graph");
+          }
+          payload = {
+            graphData: cacheData.graph_cache.graph_data,
+            paperText: cacheData.graph_cache.paper_text,
+          };
+        } else if (queueData.job_id) {
+          payload = await pollGraphJob(queueData.job_id);
+        }
+
+        if (!payload || cancelled) return;
+        setPaperText(payload.paperText);
+        setGraphData(payload.graphData);
+        setError(null);
+        setStage("graph");
       } catch (e) {
         if (!cancelled) {
           const msg = e instanceof Error ? e.message : "Auto graph generation failed";
@@ -839,7 +975,7 @@ export function PaperGraphExplorer({
     return () => {
       cancelled = true;
     };
-  }, [autoDocId, handleAnalyze]);
+  }, [autoDocId, pollGraphJob]);
 
   useEffect(() => {
     if (!prefetchedGraph) return;
@@ -851,6 +987,87 @@ export function PaperGraphExplorer({
     setError(null);
     setStage("graph");
   }, [prefetchedGraph]);
+
+  useEffect(() => {
+    setWorkspaceState(workspace);
+  }, [workspace]);
+
+  useEffect(() => {
+    if (!workspaceState || !selectedNode || !graphData?.nodes.some((node) => node.id === selectedNode.id)) return;
+    if (workspaceState.selectedNodeId === selectedNode.id) return;
+    setWorkspaceState((previous) => (previous ? { ...previous, selectedNodeId: selectedNode.id } : previous));
+  }, [graphData, selectedNode, workspaceState]);
+
+  useEffect(() => {
+    if (!workspaceState?.selectedNodeId || !graphData) return;
+    const nextNode = graphData.nodes.find((node) => node.id === workspaceState.selectedNodeId) ?? null;
+    if (nextNode && nextNode.id !== selectedNode?.id) {
+      setSelectedNode(nextNode);
+    }
+  }, [graphData, selectedNode?.id, workspaceState?.selectedNodeId]);
+
+  useEffect(() => {
+    if (!workspaceState?.sessionId) return;
+    const snapshot = JSON.stringify(workspaceState);
+    if (snapshot === lastWorkspaceSnapshotRef.current) return;
+    const timeout = window.setTimeout(async () => {
+      try {
+        await savantFetch(`/graph/sessions/${workspaceState.sessionId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            selected_node_id: workspaceState.selectedNodeId,
+            bookmarks: workspaceState.bookmarks,
+            saved_insights: workspaceState.savedInsights,
+            node_notes: workspaceState.nodeNotes,
+          }),
+        });
+        lastWorkspaceSnapshotRef.current = snapshot;
+      } catch {
+        // keep local graph workspace state even if persistence is unavailable
+      }
+    }, 700);
+
+    return () => window.clearTimeout(timeout);
+  }, [workspaceState]);
+
+  const updateNodeNote = useCallback((nodeId: string, value: string) => {
+    setWorkspaceState((previous) =>
+      previous
+        ? {
+            ...previous,
+            nodeNotes: {
+              ...previous.nodeNotes,
+              [nodeId]: value,
+            },
+          }
+        : previous
+    );
+  }, []);
+
+  const toggleBookmark = useCallback((nodeId: string) => {
+    setWorkspaceState((previous) => {
+      if (!previous) return previous;
+      const alreadyBookmarked = previous.bookmarks.includes(nodeId);
+      return {
+        ...previous,
+        bookmarks: alreadyBookmarked ? previous.bookmarks.filter((value) => value !== nodeId) : [...previous.bookmarks, nodeId],
+      };
+    });
+  }, []);
+
+  const saveInsight = useCallback((value: string) => {
+    const insight = value.trim();
+    if (!insight) return;
+    setWorkspaceState((previous) => {
+      if (!previous) return previous;
+      if (previous.savedInsights.includes(insight)) return previous;
+      return {
+        ...previous,
+        savedInsights: [insight, ...previous.savedInsights].slice(0, 24),
+      };
+    });
+  }, []);
 
   useEffect(() => {
     if (backgroundStatus === "loading" && stage === "input") {
@@ -942,9 +1159,64 @@ export function PaperGraphExplorer({
         {stage === "loading" && <LoadingScreen />}
         {stage === "graph" && graphData && (
           <div style={{ width: "100%", height: "100%", position: "relative" }}>
+            {workspaceState && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "18px",
+                  left: "20px",
+                  zIndex: 15,
+                  width: "320px",
+                  maxWidth: "calc(100vw - 40px)",
+                  background: "rgba(10,11,18,0.88)",
+                  border: "1px solid rgba(122,91,27,0.5)",
+                  borderRadius: "14px",
+                  padding: "14px",
+                  backdropFilter: "blur(12px)",
+                }}
+              >
+                <div style={{ fontSize: "10px", color: "#c8a55b", fontFamily: "'DM Mono', monospace", textTransform: "uppercase", letterSpacing: "0.12em" }}>
+                  Graph Workspace
+                </div>
+                <div style={{ marginTop: "8px", fontSize: "12px", color: "#e6d3a0", lineHeight: 1.6 }}>
+                  Revisit this paper graph later without paying the regeneration cost. Bookmarks and notes persist by document workspace.
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
+                  <span style={{ border: "1px solid rgba(66,95,137,0.7)", background: "rgba(18,35,58,0.6)", borderRadius: "999px", padding: "5px 10px", fontSize: "10px", fontFamily: "'DM Mono', monospace", color: "#b9c8e1" }}>
+                    session {workspaceState.sessionId.slice(0, 8)}
+                  </span>
+                  <span style={{ border: "1px solid rgba(16,185,129,0.4)", background: "rgba(16,185,129,0.12)", borderRadius: "999px", padding: "5px 10px", fontSize: "10px", fontFamily: "'DM Mono', monospace", color: "#d1fae5" }}>
+                    {workspaceState.bookmarks.length} bookmarks
+                  </span>
+                  <span style={{ border: "1px solid rgba(99,102,241,0.45)", background: "rgba(99,102,241,0.12)", borderRadius: "999px", padding: "5px 10px", fontSize: "10px", fontFamily: "'DM Mono', monospace", color: "#e0e7ff" }}>
+                    {workspaceState.savedInsights.length} saved insights
+                  </span>
+                </div>
+                {workspaceState.savedInsights.length > 0 && (
+                  <div style={{ marginTop: "12px", display: "grid", gap: "8px" }}>
+                    {workspaceState.savedInsights.slice(0, 3).map((item, index) => (
+                      <div key={`${item}-${index}`} style={{ border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", borderRadius: "10px", padding: "10px", fontSize: "12px", color: "#dbe3f0", lineHeight: 1.6 }}>
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <GraphCanvas graphData={graphData} selectedId={selectedNode?.id || null} onSelectNode={setSelectedNode} />
             <Legend />
-            {selectedNode && <ConceptCard node={selectedNode} paperText={paperText} onClose={() => setSelectedNode(null)} apiBase={API_BASE_URL} />}
+            {selectedNode && (
+              <ConceptCard
+                node={selectedNode}
+                paperText={paperText}
+                note={workspaceState?.nodeNotes?.[selectedNode.id] ?? ""}
+                isBookmarked={Boolean(workspaceState?.bookmarks.includes(selectedNode.id))}
+                onNoteChange={(value) => updateNodeNote(selectedNode.id, value)}
+                onToggleBookmark={() => toggleBookmark(selectedNode.id)}
+                onSaveInsight={saveInsight}
+                onClose={() => setSelectedNode(null)}
+              />
+            )}
           </div>
         )}
       </div>

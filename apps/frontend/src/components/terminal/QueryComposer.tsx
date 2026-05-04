@@ -1,5 +1,7 @@
 import type { ChangeEvent, FormEvent } from "react";
 
+import type { WorkflowStage } from "@/components/terminal/types";
+
 type QueryComposerProps = {
   canUseSpeech: boolean;
   docId: string | null;
@@ -10,6 +12,7 @@ type QueryComposerProps = {
   query: string;
   shareUrl: string | null;
   uploadedFileName: string | null;
+  workflowStages: WorkflowStage[];
   onCopyShareLink: () => void;
   onFileUpload: (event: ChangeEvent<HTMLInputElement>) => void;
   onPageNumberChange: (value: string) => void;
@@ -28,6 +31,7 @@ export function QueryComposer({
   query,
   shareUrl,
   uploadedFileName,
+  workflowStages,
   onCopyShareLink,
   onFileUpload,
   onPageNumberChange,
@@ -35,6 +39,9 @@ export function QueryComposer({
   onStartVoiceInput,
   onSubmit,
 }: QueryComposerProps) {
+  const activeStage = workflowStages.find((stage) => stage.status === "active");
+  const degradedStages = workflowStages.filter((stage) => stage.status === "degraded");
+
   return (
     <>
       <div className="flex items-center gap-4 flex-wrap">
@@ -55,6 +62,22 @@ export function QueryComposer({
       </div>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+          {activeStage ? (
+            <span className="rounded-full border border-amber-500/50 bg-amber-400/10 px-3 py-1 text-amber-200">
+              Active: {activeStage.label} - {activeStage.detail}
+            </span>
+          ) : (
+            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-emerald-200">
+              System ready for the next step
+            </span>
+          )}
+          {degradedStages.map((stage) => (
+            <span key={stage.id} className="rounded-full border border-orange-500/40 bg-orange-500/10 px-3 py-1 text-orange-200">
+              Degraded: {stage.label} - {stage.detail}
+            </span>
+          ))}
+        </div>
         <div className="flex gap-2">
           <input
             type="text"
@@ -89,7 +112,9 @@ export function QueryComposer({
             {isProcessing ? "Processing..." : "Ask"}
           </button>
         </div>
-        <div className="text-xs text-[#b99953] font-mono">Direct query mode active.</div>
+        <div className="text-xs text-[#b99953] font-mono">
+          Direct query mode active. Upload, retrieval, synthesis, and audio state are surfaced above in real time.
+        </div>
       </form>
     </>
   );

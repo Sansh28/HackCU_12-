@@ -8,7 +8,7 @@ import { QueryComposer } from "@/components/terminal/QueryComposer";
 import { SuggestionsPanel } from "@/components/terminal/SuggestionsPanel";
 import { TimelinePanel } from "@/components/terminal/TimelinePanel";
 import { VoicePlaybackPanel } from "@/components/terminal/VoicePlaybackPanel";
-import type { Citation, ConversationRecord, DocMeta, QueryTelemetry } from "@/components/terminal/types";
+import type { Citation, ConversationRecord, DocMeta, QueryTelemetry, WorkflowStage } from "@/components/terminal/types";
 import { savantFetch } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/config";
 
@@ -79,6 +79,12 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
   const [citations, setCitations] = useState<Citation[]>([]);
   const [telemetry, setTelemetry] = useState<QueryTelemetry | null>(null);
   const [docMeta, setDocMeta] = useState<DocMeta | null>(null);
+  const [workflowStages, setWorkflowStages] = useState<WorkflowStage[]>([
+    { id: "upload", label: "Upload", status: "idle", detail: "Waiting for a PDF." },
+    { id: "retrieval", label: "Retrieval", status: "idle", detail: "No active query." },
+    { id: "synthesis", label: "Synthesis", status: "idle", detail: "No answer generated yet." },
+    { id: "audio", label: "Audio", status: "idle", detail: "No playback started." },
+  ]);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -94,6 +100,12 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
   const hydratingConversationRef = useRef(false);
   const lastSyncedSnapshotRef = useRef<string>("");
   const lastConversationPayloadRef = useRef<string>("");
+
+  const setStage = (stageId: WorkflowStage["id"], status: WorkflowStage["status"], detail: string) => {
+    setWorkflowStages((previous) =>
+      previous.map((stage) => (stage.id === stageId ? { ...stage, status, detail } : stage))
+    );
+  };
 
   const canUseSpeech = useMemo(() => {
     if (typeof window === "undefined") return false;
@@ -191,6 +203,42 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
     setTelemetry(activeConversation.telemetry || null);
     setDocMeta(activeConversation.docMeta || null);
     setShareUrl(null);
+    setWorkflowStages((previous) => [
+      {
+        id: "upload",
+        label: "Upload",
+        status: activeConversation.docId ? "done" : "idle",
+        detail: activeConversation.fileName ? `Loaded ${activeConversation.fileName}` : "Waiting for a PDF.",
+      },
+      {
+        id: "retrieval",
+        label: "Retrieval",
+        status: activeConversation.telemetry?.retrieval_mode === "lexical_only" ? "degraded" : activeConversation.telemetry ? "done" : "idle",
+        detail:
+          activeConversation.telemetry?.retrieval_mode === "lexical_only"
+            ? "Lexical-only fallback was used for the last answer."
+            : activeConversation.telemetry
+              ? "Last query retrieved supporting paper chunks."
+              : "No active query.",
+      },
+      {
+        id: "synthesis",
+        label: "Synthesis",
+        status: activeConversation.telemetry?.llm_fallback ? "degraded" : activeConversation.telemetry ? "done" : "idle",
+        detail:
+          activeConversation.telemetry?.llm_fallback
+            ? "Local answer fallback was used for the last answer."
+            : activeConversation.telemetry
+              ? "Primary answer generation completed."
+              : "No answer generated yet.",
+      },
+      previous.find((stage) => stage.id === "audio") ?? {
+        id: "audio",
+        label: "Audio",
+        status: "idle",
+        detail: "No playback started.",
+      },
+    ]);
     requestAnimationFrame(() => {
       hydratingConversationRef.current = false;
     });
@@ -325,6 +373,38 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
 
   const addLog = (message: string) => setLogs((previous) => [...previous, `> ${message}`]);
 
+  const waitForJobCompletion = async (jobId: string) => {
+    for (let attempt = 0; attempt < 45; attempt += 1) {
+      const res = await savantFetch(`/jobs/${jobId}`);
+      const data = (await res.json()) as {
+        status?: "queued" | "processing" | "completed" | "failed";
+        result?: {
+          doc_id?: string;
+          page_count?: number;
+          chunk_count?: number;
+          retrieval_mode?: string;
+          embedding_stats?: {
+            lexical_fallback_triggered?: boolean;
+          };
+          ingest_ms?: number;
+        };
+        error?: string;
+        detail?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.detail || "Failed to poll background job");
+      }
+      if (data.status === "completed") {
+        return data.result ?? null;
+      }
+      if (data.status === "failed") {
+        throw new Error(data.error || "Background job failed");
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+    }
+    throw new Error("Background job timed out");
+  };
+
   const createConversation = () => {
     const next = newConversation();
     setConversations((previous) => [next, ...previous]);
@@ -452,6 +532,7 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
   const speakWithBrowserTts = (text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       addLog("No audio output available (ElevenLabs + browser TTS unavailable).");
+      setStage("audio", "error", "No audio output is available in this browser.");
       return;
     }
     const utterance = new SpeechSynthesisUtterance(text);
@@ -461,16 +542,19 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
       setVoiceMode("tts");
       setIsPaused(false);
       setIsPlaying(true);
+      setStage("audio", "degraded", "Browser speech fallback is playing the answer.");
     };
     utterance.onend = () => {
       setIsPaused(false);
       setIsPlaying(false);
       setVoiceMode(null);
+      setStage("audio", "degraded", "Browser speech fallback finished playback.");
     };
     utterance.onerror = () => {
       setIsPaused(false);
       setIsPlaying(false);
       setVoiceMode(null);
+      setStage("audio", "error", "Browser speech fallback failed.");
     };
     ttsUtteranceRef.current = utterance;
     window.speechSynthesis.cancel();
@@ -485,7 +569,8 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
     addLog(`Selected document: ${selectedFile.name}`);
 
     setIsUploading(true);
-    addLog("Uploading and vectorizing document in MongoDB Atlas...");
+    setStage("upload", "active", `Uploading ${selectedFile.name} and queuing ingestion...`);
+    addLog("Uploading PDF and creating a background ingestion job...");
 
     const formData = new FormData();
     formData.append("file", selectedFile);
@@ -497,34 +582,43 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
       });
       const data = await res.json();
       if (res.ok) {
-        if (!data.chunks_processed || data.chunks_processed === 0) {
+        addLog(`Upload queued. Tracking ingestion job ${String(data.job_id || "").slice(0, 8)}...`);
+        setDocId(data.doc_id);
+        setStage("upload", "active", "Document uploaded. Background ingestion is processing chunks.");
+
+        const jobResult = await waitForJobCompletion(String(data.job_id));
+        if (!jobResult?.chunk_count) {
           setDocId(null);
           setDocMeta(null);
+          setStage("upload", "error", "The PDF had no extractable text.");
           addLog("Upload failed: no extractable text found in this PDF.");
           addLog("Tip: use a text-based PDF or OCR the document first.");
           return;
         }
 
-        setDocId(data.doc_id);
         setDocMeta({
-          chunksProcessed: Number(data.chunks_processed || 0),
-          chunksStored: Number(data.chunks_stored || data.chunks_processed || 0),
-          pageCount: Number(data.page_count || 0),
-          ingestMs: Number(data.telemetry?.ingest_ms || 0),
+          chunksProcessed: Number(jobResult.chunk_count || 0),
+          chunksStored: Number(jobResult.chunk_count || 0),
+          pageCount: Number(jobResult.page_count || 0),
+          ingestMs: Number(jobResult.ingest_ms || 0),
         });
-        addLog(`Ingestion complete! Extracted ${data.chunks_processed} chunks, stored ${data.chunks_stored ?? data.chunks_processed}.`);
-        if (data.page_count) addLog(`Detected ${data.page_count} text pages.`);
-        if (data.telemetry?.ingest_ms) addLog(`Ingestion latency: ${data.telemetry.ingest_ms} ms.`);
+        setStage("upload", "done", `Stored ${jobResult.chunk_count} chunks across ${jobResult.page_count ?? 0} pages.`);
+        addLog(`Ingestion complete! Extracted and stored ${jobResult.chunk_count} chunks.`);
+        if (jobResult.page_count) addLog(`Detected ${jobResult.page_count} text pages.`);
+        if (jobResult.retrieval_mode === "lexical_only") addLog("Fallback active: lexical-only retrieval was selected during ingestion.");
+        if (jobResult.ingest_ms) addLog(`Ingestion latency: ${jobResult.ingest_ms} ms.`);
 
         await createSession(data.doc_id, `Session: ${selectedFile.name}`);
         if (activeConversationId) {
           onUploadComplete?.({ docId: data.doc_id, filename: selectedFile.name, conversationId: activeConversationId });
         }
       } else {
+        setStage("upload", "error", data.detail || "Upload failed.");
         addLog(`Upload failed: ${data.detail}`);
       }
     } catch (error) {
       console.error(error);
+      setStage("upload", "error", "Backend upload request failed.");
       addLog("Error connecting to backend for upload.");
     } finally {
       setIsUploading(false);
@@ -540,6 +634,9 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
 
     addLog(`Query initiated: "${promptText}"`);
     setIsProcessing(true);
+    setStage("retrieval", "active", "Searching retrieved paper chunks...");
+    setStage("synthesis", "idle", "Waiting for retrieval results.");
+    setStage("audio", "idle", "No playback started.");
 
     try {
       addLog("Searching MongoDB Atlas Vector Store...");
@@ -558,12 +655,29 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
       if (res.ok) {
         setCitations(data.citations ?? []);
         setTelemetry(data.telemetry ?? null);
+        setStage(
+          "retrieval",
+          data.telemetry?.retrieval_mode === "lexical_only" ? "degraded" : "done",
+          data.telemetry?.retrieval_mode === "lexical_only"
+            ? "Vector retrieval degraded to lexical-only fallback."
+            : `Retrieved ${data.context_used.length} supporting chunks.`
+        );
+        setStage(
+          "synthesis",
+          data.telemetry?.llm_fallback ? "degraded" : "done",
+          data.telemetry?.llm_fallback
+            ? "Generated the answer with local fallback synthesis."
+            : "Primary answer generation completed successfully."
+        );
         addLog(`Savant Brain generated response based on ${data.context_used.length} chunks.`);
         if (data.context_used.length === 0) addLog("No matching chunks were retrieved for this prompt.");
+        if (data.telemetry?.retrieval_mode === "lexical_only") addLog("Fallback active: lexical-only retrieval mode was used.");
+        if (data.telemetry?.llm_fallback) addLog("Fallback active: local-answer synthesis was used.");
         addLog(`Synthesis: ${data.answer}`);
 
         if (data.audio_base64) {
           addLog("Streaming ElevenLabs audio...");
+          setStage("audio", "active", "Streaming ElevenLabs audio...");
           const binaryString = window.atob(data.audio_base64);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
@@ -581,13 +695,20 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
           }
         } else if (data.answer) {
           addLog("ElevenLabs audio unavailable, using browser voice fallback...");
+          setStage("audio", "degraded", "ElevenLabs unavailable, switching to browser speech.");
           speakWithBrowserTts(data.answer);
+        } else {
+          setStage("audio", "idle", "No audio payload returned.");
         }
       } else {
+        setStage("retrieval", "error", data.detail || "Query processing failed.");
+        setStage("synthesis", "error", "Answer generation did not complete.");
         addLog(`Processing failed: ${data.detail}`);
       }
     } catch (error) {
       console.error(error);
+      setStage("retrieval", "error", "Query request failed before retrieval completed.");
+      setStage("synthesis", "error", "No answer was generated due to request failure.");
       addLog("Query failed. Check backend connection and try again.");
     } finally {
       setIsProcessing(false);
@@ -679,9 +800,11 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
   const pipelineStatus = useMemo(() => {
     if (isUploading) return "Uploading";
     if (isProcessing) return "Reasoning";
+    if (workflowStages.some((stage) => stage.status === "degraded")) return "Degraded";
+    if (workflowStages.some((stage) => stage.status === "error")) return "Attention Needed";
     if (docId) return "Ready";
     return "No Paper";
-  }, [docId, isProcessing, isUploading]);
+  }, [docId, isProcessing, isUploading, workflowStages]);
 
   const handleLogScroll = () => {
     if (!logsContainerRef.current) return;
@@ -757,6 +880,7 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
           pipelineStatus={pipelineStatus}
           timelineItems={timelineItems}
           uploadedFileName={uploadedFileName}
+          workflowStages={workflowStages}
           onLogScroll={handleLogScroll}
           onLogSliderChange={handleLogSlider}
         />
@@ -771,17 +895,20 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
             setVoiceMode("audio");
             setIsPaused(false);
             setIsPlaying(true);
+            setStage("audio", "done", "ElevenLabs audio playback is active.");
           }}
           onPause={() => {
             if (audioRef.current && audioRef.current.currentTime < audioRef.current.duration) {
               setIsPaused(true);
               setIsPlaying(false);
+              setStage("audio", "done", "Audio playback paused.");
             }
           }}
           onEnded={() => {
             setIsPaused(false);
             setIsPlaying(false);
             setVoiceMode(null);
+            setStage("audio", "done", "Audio playback finished.");
           }}
           className="hidden"
         />
@@ -807,6 +934,7 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
             query={query}
             shareUrl={shareUrl}
             uploadedFileName={uploadedFileName}
+            workflowStages={workflowStages}
             onCopyShareLink={() => void copyShareLink()}
             onFileUpload={(event) => void handleFileUpload(event)}
             onPageNumberChange={setPageNumber}

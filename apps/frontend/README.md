@@ -41,6 +41,17 @@ npm run dev -- --hostname 127.0.0.1 --port 3000
 
 Open [http://127.0.0.1:3000](http://127.0.0.1:3000).
 
+## Deployment
+
+This folder is the canonical Vercel project root for the web app.
+
+Recommended Vercel settings:
+
+- Framework Preset: `Next.js`
+- Root Directory: `apps/frontend`
+- Install Command: `npm ci`
+- Build Command: `npm run build`
+
 ## Available Scripts
 
 - `npm run dev` starts the development server
