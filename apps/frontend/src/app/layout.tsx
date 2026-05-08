@@ -1,5 +1,17 @@
 import type { Metadata } from "next";
+import { IBM_Plex_Mono, Manrope } from "next/font/google";
 import "./globals.css";
+
+const manrope = Manrope({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
 
 export const metadata: Metadata = {
   title: "Savant",
@@ -13,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className={`${manrope.variable} ${ibmPlexMono.variable} antialiased`}>{children}</body>
     </html>
   );
 }

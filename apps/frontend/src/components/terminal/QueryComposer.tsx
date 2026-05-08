@@ -45,15 +45,15 @@ export function QueryComposer({
   return (
     <>
       <div className="flex items-center gap-4 flex-wrap">
-        <label className="cursor-pointer bg-[#2a1f0d]/65 hover:bg-[#3a2b10]/75 text-white font-mono text-sm px-4 py-2 rounded-lg transition border border-[#a67c1c]">
+        <label className="cursor-pointer bg-[#7f4c31] hover:bg-[#6b3f28] text-[#fff9f0] font-mono text-sm px-4 py-2 rounded-xl transition border border-[#7f4c31]">
           {isUploading ? "Uploading..." : uploadedFileName ? "Replace Document (PDF)" : "Upload Document (PDF)"}
           <input type="file" accept=".pdf" className="hidden" onChange={onFileUpload} disabled={isUploading || isProcessing} />
         </label>
-        {uploadedFileName && <span className="text-[#cfb06f] text-sm truncate max-w-[280px]">{uploadedFileName}</span>}
+        {uploadedFileName && <span className="text-[#6d5742] text-sm truncate max-w-[280px]">{uploadedFileName}</span>}
         {shareUrl && (
           <button
             type="button"
-            className="bg-[#171109]/60 border border-[#a67c1c] text-[#f8e6bc] px-3 py-2 rounded-lg text-xs font-mono backdrop-blur-sm"
+            className="bg-[#f8efe0] border border-[#c19a6b] text-[#5a3a26] px-3 py-2 rounded-lg text-xs font-mono"
             onClick={onCopyShareLink}
           >
             Copy Share Link
@@ -64,17 +64,17 @@ export function QueryComposer({
       <form onSubmit={onSubmit} className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
           {activeStage ? (
-            <span className="rounded-full border border-amber-500/50 bg-amber-400/10 px-3 py-1 text-amber-200">
-              Active: {activeStage.label} - {activeStage.detail}
+            <span className="rounded-full border border-amber-700/40 bg-amber-100/70 px-3 py-1 text-amber-900">
+              Active: {activeStage.label} · {activeStage.detail}
             </span>
           ) : (
-            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-emerald-200">
+            <span className="rounded-full border border-emerald-700/30 bg-emerald-100/70 px-3 py-1 text-emerald-800">
               System ready for the next step
             </span>
           )}
           {degradedStages.map((stage) => (
-            <span key={stage.id} className="rounded-full border border-orange-500/40 bg-orange-500/10 px-3 py-1 text-orange-200">
-              Degraded: {stage.label} - {stage.detail}
+            <span key={stage.id} className="rounded-full border border-orange-700/30 bg-orange-100/70 px-3 py-1 text-orange-800">
+              Degraded: {stage.label} · {stage.detail}
             </span>
           ))}
         </div>
@@ -84,7 +84,7 @@ export function QueryComposer({
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder="Ask Savant to analyze the document..."
-            className="flex-1 bg-[#171109]/58 border border-[#7a5b1b]/70 rounded-lg px-4 py-2 font-mono text-sm text-white focus:outline-none focus:border-[#f2c14e] backdrop-blur-sm"
+            className="flex-1 bg-[#fffdf8] border border-[#cfb999] rounded-xl px-4 py-2 font-mono text-sm text-[#261d17] focus:outline-none focus:border-[#8a6344]"
             disabled={!docId || isUploading || isProcessing}
           />
           <input
@@ -93,26 +93,26 @@ export function QueryComposer({
             value={pageNumber}
             onChange={(e) => onPageNumberChange(e.target.value)}
             placeholder="Page"
-            className="w-24 bg-[#171109]/58 border border-[#7a5b1b]/70 rounded-lg px-2 py-2 font-mono text-sm text-white focus:outline-none focus:border-[#f2c14e] backdrop-blur-sm"
+            className="w-24 bg-[#fffdf8] border border-[#cfb999] rounded-xl px-2 py-2 font-mono text-sm text-[#261d17] focus:outline-none focus:border-[#8a6344]"
             disabled={!docId || isUploading || isProcessing}
           />
           <button
             type="button"
             onClick={onStartVoiceInput}
             disabled={!docId || isUploading || isProcessing || !canUseSpeech}
-            className="bg-[#171109]/60 text-[#f8e6bc] px-3 py-2 rounded-lg border border-[#a67c1c] font-mono text-xs backdrop-blur-sm"
+            className="bg-[#f8efe0] text-[#5a3a26] px-3 py-2 rounded-xl border border-[#c19a6b] font-mono text-xs"
           >
             {isListening ? "Stop Mic" : "Voice"}
           </button>
           <button
             type="submit"
             disabled={!docId || isUploading || isProcessing || !query.trim()}
-            className="bg-[#f2c14e] text-[#1a1205] px-6 py-2 rounded-lg font-semibold text-sm hover:bg-[#f2c14e] disabled:opacity-50 disabled:cursor-not-allowed transition"
+            className="bg-[#7f4c31] text-[#fff9f0] px-6 py-2 rounded-xl font-semibold text-sm hover:bg-[#6b3f28] disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
             {isProcessing ? "Processing..." : "Ask"}
           </button>
         </div>
-        <div className="text-xs text-[#b99953] font-mono">
+        <div className="text-xs text-[#7f6751] font-mono">
           Direct query mode active. Upload, retrieval, synthesis, and audio state are surfaced above in real time.
         </div>
       </form>

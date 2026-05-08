@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #090909;
-  --foreground: #f6e7c1;
-  --panel: #121212;
-  --panel-soft: #171717;
-  --border: #2a2a2a;
-  --muted: #b99953;
-  --accent: #f2c14e;
-  --accent-2: #b4882f;
-  --font-geist-sans: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --font-geist-mono: "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --background: #f7f2e8;
+  --foreground: #1d1f24;
+  --panel: #fffdf8;
+  --panel-soft: #f1eadc;
+  --border: #d7c8af;
+  --muted: #7c6953;
+  --accent: #7f4c31;
+  --accent-2: #cda66e;
+  --font-geist-sans: "Manrope", "Avenir Next", "Segoe UI", sans-serif;
+  --font-geist-mono: "IBM Plex Mono", "Cascadia Code", "SFMono-Regular", Consolas, monospace;
 }
 
 @theme inline {
@@ -25,15 +25,15 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   background-image:
-    radial-gradient(circle at 12% 10%, rgba(255, 255, 255, 0.045), transparent 30%),
-    radial-gradient(circle at 86% 16%, rgba(255, 255, 255, 0.03), transparent 36%),
-    linear-gradient(160deg, #090909 0%, #111111 52%, #161616 100%);
+    radial-gradient(circle at 10% 5%, rgba(234, 208, 163, 0.45), transparent 32%),
+    radial-gradient(circle at 88% 20%, rgba(170, 200, 219, 0.35), transparent 38%),
+    linear-gradient(145deg, #f8f4ea 0%, #efe3d2 46%, #f6f0e4 100%);
   background-attachment: fixed;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #334866 transparent;
+  scrollbar-color: #9f7f57 transparent;
 }
 
 *::-webkit-scrollbar {
@@ -42,7 +42,7 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: #334866;
+  background: #9f7f57;
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;

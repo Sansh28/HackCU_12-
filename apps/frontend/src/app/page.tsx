@@ -264,21 +264,21 @@ export default function Home() {
   );
 
   return (
-    <div className="relative h-screen w-screen text-[#f6e7c1] p-3 sm:p-5 overflow-hidden">
+    <div className="relative h-screen w-screen text-[#1d1f24] p-3 sm:p-5 overflow-hidden">
       <FloatingNodesBackground />
       <main className="relative z-10 flex flex-col gap-4 h-full w-full max-w-[1720px] mx-auto">
-        <header className="rounded-2xl border border-[#7a5b1b] bg-[#0e0a05]/88 backdrop-blur-xl px-5 py-4 shadow-[0_18px_60px_rgba(0,0,0,0.55)]">
+        <header className="rounded-3xl border border-[#cfb999] bg-[#fffcf6]/88 backdrop-blur-xl px-5 py-4 shadow-[0_24px_60px_rgba(66,46,20,0.16)]">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#8d6a20] bg-[#171109] px-3 py-1 text-[10px] font-mono uppercase tracking-[0.22em] text-[#f2c14e]">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#b89060] bg-[#f8efe0] px-3 py-1 text-[10px] font-mono uppercase tracking-[0.22em] text-[#7f4c31]">
                 Research Cockpit
               </div>
               <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mt-2">Savant</h1>
-              <p className="text-sm text-[#d1b26a] mt-1">Analyze papers with chat, voice, and concept graphs in one workspace.</p>
+              <p className="text-sm text-[#6e5a47] mt-1">Analyze papers with chat, voice, and concept graphs in one focused workspace.</p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="hidden sm:flex items-center gap-2 rounded-xl border border-[#7a5b1b] bg-[#171109] px-3 py-2 text-xs font-mono text-[#e0c27c]">
-                <span className="h-2 w-2 rounded-full bg-[#f2c14e] shadow-[0_0_12px_rgba(242,193,78,0.8)]" />
+              <div className="hidden sm:flex items-center gap-2 rounded-xl border border-[#cfb999] bg-[#f8efe0] px-3 py-2 text-xs font-mono text-[#7f4c31]">
+                <span className="h-2 w-2 rounded-full bg-[#7f4c31] shadow-[0_0_12px_rgba(127,76,49,0.35)]" />
                 Live Session
               </div>
             </div>
@@ -286,13 +286,13 @@ export default function Home() {
         </header>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1 rounded-xl border border-[#7a5b1b] bg-[#140f08]/90 p-1">
+          <div className="flex items-center gap-1 rounded-2xl border border-[#cfb999] bg-[#fffbf4]/90 p-1.5 shadow-[0_10px_24px_rgba(66,46,20,0.1)]">
             <button
               onClick={() => setMode("assistant")}
               className={`px-4 py-2 text-xs sm:text-sm rounded-lg font-mono transition ${
                 mode === "assistant"
-                  ? "bg-[#f2c14e] text-[#1a1205]"
-                  : "bg-transparent text-[#d8b66a] hover:text-[#f7deaa]"
+                  ? "bg-[#7f4c31] text-[#fff8ef]"
+                  : "bg-transparent text-[#7d6248] hover:text-[#3e2a1f]"
               }`}
             >
               Savant Assistant
@@ -301,24 +301,24 @@ export default function Home() {
               onClick={() => setMode("graph")}
               className={`px-4 py-2 text-xs sm:text-sm rounded-lg font-mono transition ${
                 mode === "graph"
-                  ? "bg-[#d4a33a] text-[#1a1205]"
-                  : "bg-transparent text-[#d8b66a] hover:text-[#f7deaa]"
+                  ? "bg-[#cda66e] text-[#2f241d]"
+                  : "bg-transparent text-[#7d6248] hover:text-[#3e2a1f]"
               }`}
             >
               Paper Graph Explorer
             </button>
           </div>
 
-          <div className="rounded-xl border border-[#7a5b1b] bg-[#140f08]/90 px-3 py-2 text-[11px] font-mono text-[#d8b66a]">
+          <div className="rounded-xl border border-[#cfb999] bg-[#fffbf4]/90 px-3 py-2 text-[11px] font-mono text-[#7d6248]">
             Graph:
-            {activeGraphState?.status === "loading" && <span className="ml-2 text-amber-300">Building</span>}
-            {activeGraphState?.status === "ready" && <span className="ml-2 text-[#f2c14e]">Ready</span>}
+            {activeGraphState?.status === "loading" && <span className="ml-2 text-amber-700">Building</span>}
+            {activeGraphState?.status === "ready" && <span className="ml-2 text-[#7f4c31]">Ready</span>}
             {activeGraphState?.status === "error" && <span className="ml-2 text-red-300">Error</span>}
-            {!activeGraphState?.status || activeGraphState.status === "idle" ? <span className="ml-2 text-[#b99953]">Idle</span> : null}
+            {!activeGraphState?.status || activeGraphState.status === "idle" ? <span className="ml-2 text-[#9f7e60]">Idle</span> : null}
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 flex flex-col gap-4 rounded-2xl border border-[#7a5b1b] bg-[#0d0905]/88 backdrop-blur-xl p-3 sm:p-4 overflow-hidden shadow-[0_22px_70px_rgba(0,0,0,0.5)]">
+        <div className="flex-1 min-h-0 flex flex-col gap-4 rounded-3xl border border-[#cfb999] bg-[#fffcf6]/90 backdrop-blur-xl p-3 sm:p-4 overflow-hidden shadow-[0_30px_80px_rgba(66,46,20,0.14)]">
           <div className={mode === "assistant" ? "block" : "hidden"} aria-hidden={mode !== "assistant"}>
             <SavantTerminal
               onConversationChange={handleConversationChange}
