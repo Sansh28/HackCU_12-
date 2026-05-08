@@ -26,11 +26,11 @@ export function TimelinePanel({
   onLogSliderChange,
 }: TimelinePanelProps) {
   const statusStyles: Record<WorkflowStage["status"], string> = {
-    idle: "border-[#5d4930] bg-[#120d08] text-[#b99953]",
-    active: "border-amber-500/50 bg-amber-400/10 text-amber-200",
-    done: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
-    error: "border-red-500/40 bg-red-500/10 text-red-200",
-    degraded: "border-orange-500/40 bg-orange-500/10 text-orange-200",
+    idle: "border-[#ccb794] bg-[#fffdf8] text-[#81674e]",
+    active: "border-amber-700/30 bg-amber-100/70 text-amber-900",
+    done: "border-emerald-700/20 bg-emerald-100/70 text-emerald-800",
+    error: "border-red-600/30 bg-red-100/70 text-red-800",
+    degraded: "border-orange-700/20 bg-orange-100/70 text-orange-800",
   };
 
   return (
@@ -38,18 +38,18 @@ export function TimelinePanel({
       <div
         ref={logsContainerRef}
         onScroll={onLogScroll}
-        className="flex-1 bg-[#0a0704]/45 backdrop-blur-md border border-[#37547e]/70 rounded-xl p-4 overflow-y-auto space-y-2 h-[300px] max-h-[420px] min-h-0 shadow-[inset_0_0_0_1px_rgba(120,160,220,0.12)]"
+        className="flex-1 bg-[#fffaf2]/70 backdrop-blur-md border border-[#cfb999] rounded-2xl p-4 overflow-y-auto space-y-2 h-[300px] max-h-[420px] min-h-0 shadow-[inset_0_0_0_1px_rgba(114,76,40,0.08)]"
       >
-        <div className="mb-3 p-3 rounded-xl border border-[#8d6a20] bg-[#161007]/60 backdrop-blur-sm">
+        <div className="mb-3 p-3 rounded-xl border border-[#c19a6b] bg-[#fff9f0] backdrop-blur-sm">
           <div className="flex items-center justify-between gap-2">
-            <div className="text-[11px] font-mono uppercase tracking-[0.16em] text-[#f2c14e]">Paper Session</div>
-            <div className="text-[11px] font-mono text-[#f7e6bf]">{pipelineStatus}</div>
+            <div className="text-[11px] font-mono uppercase tracking-[0.16em] text-[#8a6344]">Paper Session</div>
+            <div className="text-[11px] font-mono text-[#6f553d]">{pipelineStatus}</div>
           </div>
-          <div className="mt-1 text-sm text-[#f8e6bf] truncate">{uploadedFileName || "No document uploaded"}</div>
-          <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-mono text-[#cfb06f]">
-            {docMeta?.pageCount ? <span className="px-2 py-1 rounded-md bg-[#12233a] border border-[#6a4f18]">{docMeta.pageCount} pages</span> : null}
-            {docMeta?.chunksProcessed ? <span className="px-2 py-1 rounded-md bg-[#12233a] border border-[#6a4f18]">{docMeta.chunksProcessed} chunks</span> : null}
-            {docMeta?.ingestMs ? <span className="px-2 py-1 rounded-md bg-[#12233a] border border-[#6a4f18]">{docMeta.ingestMs} ms ingest</span> : null}
+          <div className="mt-1 text-sm text-[#3e3026] truncate">{uploadedFileName || "No document uploaded"}</div>
+          <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-mono text-[#7f6751]">
+            {docMeta?.pageCount ? <span className="px-2 py-1 rounded-md bg-[#f4ead9] border border-[#ccb794]">{docMeta.pageCount} pages</span> : null}
+            {docMeta?.chunksProcessed ? <span className="px-2 py-1 rounded-md bg-[#f4ead9] border border-[#ccb794]">{docMeta.chunksProcessed} chunks</span> : null}
+            {docMeta?.ingestMs ? <span className="px-2 py-1 rounded-md bg-[#f4ead9] border border-[#ccb794]">{docMeta.ingestMs} ms ingest</span> : null}
           </div>
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
             {workflowStages.map((stage) => (
@@ -61,8 +61,8 @@ export function TimelinePanel({
             ))}
           </div>
           <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px]">
-            <div className="rounded-lg border border-[#3b2b15] bg-[#0f0b06] px-3 py-2 text-[#e7d29d]">
-              <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#c8a55b]">What Happened</div>
+            <div className="rounded-lg border border-[#cfb999] bg-[#fffcf6] px-3 py-2 text-[#4d3b2d]">
+              <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#8a6344]">What Happened</div>
               <div className="mt-1 leading-relaxed">
                 {pipelineStatus === "Degraded"
                   ? "The system completed the request, but one of the retrieval or synthesis fallbacks was used."
@@ -71,14 +71,14 @@ export function TimelinePanel({
                     : "The pipeline is moving through upload, retrieval, synthesis, and audio as expected."}
               </div>
             </div>
-            <div className="rounded-lg border border-[#3b2b15] bg-[#0f0b06] px-3 py-2 text-[#e7d29d]">
-              <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#c8a55b]">How To Read Evidence</div>
+            <div className="rounded-lg border border-[#cfb999] bg-[#fffcf6] px-3 py-2 text-[#4d3b2d]">
+              <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#8a6344]">How To Read Evidence</div>
               <div className="mt-1 leading-relaxed">
                 Evidence cards explain why each chunk was selected, which page it came from, and which query terms it matched.
               </div>
             </div>
-            <div className="rounded-lg border border-[#3b2b15] bg-[#0f0b06] px-3 py-2 text-[#e7d29d]">
-              <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#c8a55b]">Graph Readiness</div>
+            <div className="rounded-lg border border-[#cfb999] bg-[#fffcf6] px-3 py-2 text-[#4d3b2d]">
+              <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#8a6344]">Graph Readiness</div>
               <div className="mt-1 leading-relaxed">
                 Once a paper is ready, its graph workspace can be revisited without re-running the full generation path each time.
               </div>
@@ -122,12 +122,12 @@ export function TimelinePanel({
                           : "#f2c14e",
                 }}
               />
-              <div className="text-[#efd39a] font-mono text-xs sm:text-sm leading-relaxed">{item.raw}</div>
+              <div className="text-[#4d3b2d] font-mono text-xs sm:text-sm leading-relaxed">{item.raw}</div>
             </div>
           </div>
         ))}
       </div>
-      <div className="w-7 bg-[#171109]/50 backdrop-blur-sm border border-[#7a5b1b]/70 rounded-xl flex items-center justify-center px-1">
+      <div className="w-7 bg-[#fffaf2]/60 backdrop-blur-sm border border-[#cfb999] rounded-xl flex items-center justify-center px-1">
         <input
           aria-label="Scroll logs"
           type="range"

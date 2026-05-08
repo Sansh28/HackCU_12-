@@ -848,7 +848,7 @@ export function SavantTerminal({ onUploadComplete, onConversationChange, graphSt
   };
 
   return (
-    <div className="h-full min-h-[520px] grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-4">
+    <div className="h-full min-h-[520px] grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-4">
       <ConversationSidebar
         activeConversationId={activeConversationId}
         conversations={filteredConversations}
